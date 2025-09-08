@@ -209,6 +209,23 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@babylonjs/core@npm:^8.26.0":
+  version: 8.26.0
+  resolution: "@babylonjs/core@npm:8.26.0"
+  checksum: 10c0/d1707e344e71c36567ad5ba9aca9f13c784ef8fbada80cb17e27946b1e86c740da03c79c92f79d1d88738ab8240e82b33c7cbbc6667bb7e75ccfd2ce87dcb99c
+  languageName: node
+  linkType: hard
+
+"@babylonjs/loaders@npm:^8.26.0":
+  version: 8.26.0
+  resolution: "@babylonjs/loaders@npm:8.26.0"
+  peerDependencies:
+    "@babylonjs/core": ^8.0.0
+    babylonjs-gltf2interface: ^8.0.0
+  checksum: 10c0/40c5bdba7d477302fa8b935e52d07c98305358a905845e459dda47b9bbbb9c205729f0bf0d85e018fa1ed3be73e436579b2f48ef200ac603057b560fd677fb14
+  languageName: node
+  linkType: hard
+
 "@esbuild/aix-ppc64@npm:0.25.9":
   version: 0.25.9
   resolution: "@esbuild/aix-ppc64@npm:0.25.9"
@@ -1096,11 +1113,12 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "babylon-joystick-test@workspace:."
   dependencies:
+    "@babylonjs/core": "npm:^8.26.0"
+    "@babylonjs/loaders": "npm:^8.26.0"
     "@eslint/js": "npm:^9.33.0"
     "@types/react": "npm:^19.1.12"
     "@types/react-dom": "npm:^19.1.7"
     "@vitejs/plugin-react": "npm:^5.0.0"
-    babylonjs: "npm:^8.26.0"
     eslint: "npm:^9.33.0"
     eslint-plugin-react-hooks: "npm:^5.2.0"
     eslint-plugin-react-refresh: "npm:^0.4.20"
@@ -1112,13 +1130,6 @@ __metadata:
     vite: "npm:^7.1.2"
   languageName: unknown
   linkType: soft
-
-"babylonjs@npm:^8.26.0":
-  version: 8.26.0
-  resolution: "babylonjs@npm:8.26.0"
-  checksum: 10c0/0efa207e76d29c327becb05cae804ddf26850f4adb61d4a717778e19a475d9153118ed06bbc26421c92d1d2985ac2150ff4799ac827017ec85c0ba3e6315cf3b
-  languageName: node
-  linkType: hard
 
 "balanced-match@npm:^1.0.0":
   version: 1.0.2
