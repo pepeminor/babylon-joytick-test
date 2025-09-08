@@ -1,0 +1,3 @@
+[build]
+  command = "yarn build"   # hoặc "npm run build" nếu dùng npm
+  publish = "dist"
