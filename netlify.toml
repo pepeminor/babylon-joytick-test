@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build"
+  command = "yarn build"
   publish = "dist"
 
 # SPA fallback (nếu sau này dùng React Router)
