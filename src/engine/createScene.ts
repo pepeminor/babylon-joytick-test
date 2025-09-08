@@ -165,48 +165,48 @@ async function importMeshWithRetry(rootUrl: string, fileName: string, scene: Sce
     throw lastErr;
 }
 
-function autoOrientUpright(visual: TransformNode) {
-    // Giữ lại rotation gốc
-    const baseRot = visual.rotation.clone();
+// function autoOrientUpright(visual: TransformNode) {
+//     // Giữ lại rotation gốc
+//     const baseRot = visual.rotation.clone();
 
-    // 3 ứng viên: đang Y-up (giữ nguyên), Z-up (xoay -90° X), X-up (xoay +90° Z)
-    const candidates = [
-        new Vector3(0, 0, 0),                    // Y-up
-        new Vector3(-Math.PI / 2, 0, 0),         // Z-up -> -90° quanh X
-        new Vector3(0, 0, Math.PI / 2),         // X-up -> +90° quanh Z
-    ];
+//     // 3 ứng viên: đang Y-up (giữ nguyên), Z-up (xoay -90° X), X-up (xoay +90° Z)
+//     const candidates = [
+//         new Vector3(0, 0, 0),                    // Y-up
+//         new Vector3(-Math.PI / 2, 0, 0),         // Z-up -> -90° quanh X
+//         new Vector3(0, 0, Math.PI / 2),         // X-up -> +90° quanh Z
+//     ];
 
-    let bestScore = -Infinity;
-    let bestRot = candidates[0].clone();
+//     let bestScore = -Infinity;
+//     let bestRot = candidates[0].clone();
 
-    for (const rot of candidates) {
-        // thử xoay
-        visual.rotation.copyFrom(baseRot).addInPlace(rot);
+//     for (const rot of candidates) {
+//         // thử xoay
+//         visual.rotation.copyFrom(baseRot).addInPlace(rot);
 
-        // đo bounding sau xoay
-        const b = visual.getHierarchyBoundingVectors();
-        const dx = b.max.x - b.min.x;
-        const dy = b.max.y - b.min.y;
-        const dz = b.max.z - b.min.z;
+//         // đo bounding sau xoay
+//         const b = visual.getHierarchyBoundingVectors();
+//         const dx = b.max.x - b.min.x;
+//         const dy = b.max.y - b.min.y;
+//         const dz = b.max.z - b.min.z;
 
-        // điểm số: càng "cao" (dy) và đế càng "gọn" (max(dx, dz)) thì càng tốt
-        const height = dy;
-        const footprint = Math.max(dx, dz) + 1e-6;
-        const straightness = height / footprint;
+//         // điểm số: càng "cao" (dy) và đế càng "gọn" (max(dx, dz)) thì càng tốt
+//         const height = dy;
+//         const footprint = Math.max(dx, dz) + 1e-6;
+//         const straightness = height / footprint;
 
-        // nhẹ nhàng thưởng thêm nếu trọng tâm không bị lệch quá
-        const centerY = (b.max.y + b.min.y) * 0.5;
-        const score = straightness - Math.abs(centerY) * 0.001;
+//         // nhẹ nhàng thưởng thêm nếu trọng tâm không bị lệch quá
+//         const centerY = (b.max.y + b.min.y) * 0.5;
+//         const score = straightness - Math.abs(centerY) * 0.001;
 
-        if (score > bestScore) {
-            bestScore = score;
-            bestRot = rot.clone();
-        }
-    }
+//         if (score > bestScore) {
+//             bestScore = score;
+//             bestRot = rot.clone();
+//         }
+//     }
 
-    // áp dụng xoay tối ưu
-    visual.rotation.copyFrom(baseRot).addInPlace(bestRot);
-}
+//     // áp dụng xoay tối ưu
+//     visual.rotation.copyFrom(baseRot).addInPlace(bestRot);
+// }
 
 
 function forceOpaqueMaterials(root: TransformNode) {
