@@ -16,7 +16,9 @@ export type SceneBundle = {
 };
 
 // === Config ==============================================================
-const MODEL_PATH = "models/pepe.glb";
+// const MODEL_PATH = "models/pepe.glb";
+// const MODEL_PATH = "models/pepe-idle.glb";
+const MODEL_PATH = "models/pepe-idle-t.glb";
 const MODEL_SCALE = 0.3;
 const FACE_TO_PLUS_Z_DEG = 0;
 const EXTRA_EULER_ROT = new Vector3(0, 0, 0);
