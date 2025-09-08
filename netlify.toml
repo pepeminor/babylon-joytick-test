@@ -1,8 +1,6 @@
 [build]
-  command = "yarn build"
+  command = "npm ci && npm run build"
   publish = "dist"
-
-# SPA fallback (nếu sau này dùng React Router)
 [[redirects]]
   from = "/*"
   to = "/index.html"
