@@ -14,6 +14,7 @@ export type SceneBundle = {
     scene: Scene;
     camera: FreeCamera;
     player: TransformNode;
+    setLocomotion: (speed: number) => void;   // ⬅⬅ mới
 };
 
 // === Config ==============================================================
@@ -200,6 +201,8 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
             wIdle = 1; wRun = 0;
             applyWeights();
 
+
+
             animState = "idle";
             animReady = true;
 
@@ -207,6 +210,13 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
             console.warn("Import GLB failed → giữ placeholder:", err);
         }
     })();
+
+    const SPEED_THRESHOLD = 0.08; // m/s: > ngưỡng => Run, ngược lại Idle
+    const setLocomotion = (speed: number) => {
+        if (!animReady) return;
+        if (speed > SPEED_THRESHOLD) setState("run");
+        else setState("idle");
+    };
 
     // Props tĩnh
     for (let i = 0; i < 40; i++) {
@@ -268,7 +278,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
     });
     // ======================================================================
 
-    return { engine, scene, camera, player };
+    return { engine, scene, camera, player, setLocomotion };
 }
 
 async function importMeshWithRetry(rootUrl: string, fileName: string, scene: Scene, retries = 2) {

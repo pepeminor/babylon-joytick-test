@@ -44,7 +44,7 @@ export default function App() {
     canvas.style.setProperty("-webkit-touch-callout", "none");
 
     // --- engine + scene (sync, có placeholder ngay)
-    const { engine, scene, camera, player } = createScene(canvas);
+    const { engine, scene, camera, player, setLocomotion } = createScene(canvas);
     engine.resize();
     try { scene.render(); } catch { }
 
@@ -123,6 +123,8 @@ export default function App() {
 
       // xoay player theo hướng chạy
       const spd = vel.length();
+      setLocomotion(spd);
+
       if (spd > 0.1) {
         const targetYaw = Math.atan2(vel.x, vel.z);
         const curYaw = player.rotation.y;
