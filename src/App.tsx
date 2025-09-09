@@ -190,15 +190,6 @@ export default function App() {
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }}
       />
 
-      <div style={{
-        position: "fixed", left: 12, top: 12, zIndex: 20,
-        padding: "6px 10px", borderRadius: 10, background: "rgba(255,255,255,.06)",
-        border: "1px solid rgba(255,255,255,.15)", fontSize: 12,
-        pointerEvents: "none",
-      }}>
-        Drag để xoay camera • Joystick để di chuyển • WASD (desktop)
-      </div>
-
       <DebugOverlay
         info={debug}
         debugOn={debugOn}
