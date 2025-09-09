@@ -79,11 +79,12 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
     dir.intensity = 0.9;
 
     // Ground
+    const BG = new Color3(0.06, 0.07, 0.09);
     const ground = MeshBuilder.CreateGround("ground", { width: 400, height: 400 }, scene);
     const gmat = new StandardMaterial("gmat", scene);
     gmat.diffuseColor = GROUND_COLOR;
     gmat.specularColor = new Color3(0, 0, 0);
-    gmat.emissiveColor = new Color3(0, 0, 0);
+    gmat.emissiveColor = BG;
     ground.material = gmat;
     ground.freezeWorldMatrix();
 
