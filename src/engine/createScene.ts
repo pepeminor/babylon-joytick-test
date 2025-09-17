@@ -3,7 +3,8 @@ import {
     FreeCamera, HemisphericLight, DirectionalLight,
     MeshBuilder, StandardMaterial, TransformNode,
     // AbstractMesh, 
-    AnimationGroup
+    AnimationGroup,
+    Scalar
 } from "@babylonjs/core";
 // import { CubeTexture } from "@babylonjs/core/Materials/Textures/cubeTexture";
 // import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
@@ -166,7 +167,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
             const len = Math.hypot(vx, vz);
             vx /= len; vz /= len;
             const targetYaw = Math.atan2(vx, vz);
-            player.rotation.y = targetYaw;
+            player.rotation.y = Scalar.LerpAngle(player.rotation.y, targetYaw, 0.2);
             player.position.x += vx * moveSpeed * dt;
             player.position.z += vz * moveSpeed * dt;
             setLocomotion(moveSpeed);
