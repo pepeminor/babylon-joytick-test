@@ -14,19 +14,11 @@ export type SceneBundle = {
     scene: Scene;
     camera: FreeCamera;
     player: TransformNode;
-    setLocomotion: (speed: number) => void;   // ⬅⬅ mới
+    setLocomotion: (speed: number) => void;
 };
 
-// === Config ==============================================================
 const MODEL_PATH = "models/pepe-test.glb";
 const MODEL_SCALE = 0.1;
-const FACE_TO_PLUS_Z_DEG = 0;
-const EXTRA_EULER_ROT = new Vector3(0, 0, 0);
-
-// Theme tối (giống bản đầu)
-const SKY_COLOR = new Color4(0.06, 0.07, 0.09, 1);
-const GROUND_COLOR = new Color3(0.06, 0.07, 0.09);
-// ========================================================================
 
 export function createScene(canvas: HTMLCanvasElement): SceneBundle {
     const engine = new Engine(canvas, true, {
@@ -45,29 +37,14 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
     window.addEventListener("resize", hardResize);
 
     const scene = new Scene(engine);
-    scene.clearColor = SKY_COLOR;
+    scene.clearColor = new Color4(0.06, 0.07, 0.09, 1);
 
-    // Bật blending cho animation (crossfade mượt)
     scene.animationPropertiesOverride = new AnimationPropertiesOverride();
     scene.animationPropertiesOverride.enableBlending = true;
-    scene.animationPropertiesOverride.blendingSpeed = 0.08; // ~0.25s
-
-    // IBL: gán khi load xong
-    (async () => {
-        const envPath = `${import.meta.env.BASE_URL}env/neutral.env`;
-        try {
-            const res = await fetch(envPath, { cache: "force-cache" });
-            if (!res.ok) return;
-            const tex = CubeTexture.CreateFromPrefilteredData(envPath, scene);
-            tex.onLoadObservable.addOnce(() => {
-                scene.environmentTexture = tex;
-                scene.environmentIntensity = 0.9;
-            });
-        } catch { }
-    })();
+    scene.animationPropertiesOverride.blendingSpeed = 0.08;
 
     // Camera
-    const camera = new FreeCamera("cam", new Vector3(0, 1.6, 6), scene);
+    const camera = new FreeCamera("cam", new Vector3(0, 1.6, 8), scene);
     camera.minZ = 0.01; camera.maxZ = 500;
     camera.setTarget(new Vector3(0, 0.9, 0));
 
@@ -79,36 +56,22 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
     dir.intensity = 0.9;
 
     // Ground
-    const BG = new Color3(0.06, 0.07, 0.09);
     const ground = MeshBuilder.CreateGround("ground", { width: 400, height: 400 }, scene);
     const gmat = new StandardMaterial("gmat", scene);
-    gmat.diffuseColor = GROUND_COLOR;
+    gmat.diffuseColor = new Color3(0.06, 0.07, 0.09);
     gmat.specularColor = new Color3(0, 0, 0);
-    gmat.emissiveColor = BG;
+    gmat.emissiveColor = new Color3(0.06, 0.07, 0.09);
     ground.material = gmat;
     ground.freezeWorldMatrix();
 
-    // Player root
+    // === Local Player =====================================================
     const player = new TransformNode("playerRoot", scene);
 
-    // Placeholder cube
-    const placeholder = MeshBuilder.CreateBox("playerPlaceholder", { size: 1.2 }, scene);
-    const pmat = new StandardMaterial("pmat", scene);
-    pmat.diffuseColor = new Color3(1, 0.18, 0.18);
-    pmat.emissiveColor = new Color3(0, 0, 0);
-    placeholder.material = pmat;
-    placeholder.position = new Vector3(0, 0.6, 0);
-    placeholder.parent = player;
-
-    // === Animation state machine (Idle <-> Run) ============================
     let idleGroup: AnimationGroup | undefined;
     let runGroup: AnimationGroup | undefined;
     let animReady = false;
 
-    // weight hiện tại (tự quản, vì Babylon không expose getter weight public)
-    let wIdle = 1;
-    let wRun = 0;
-
+    let wIdle = 1, wRun = 0;
     const applyWeights = () => {
         idleGroup?.setWeightForAllAnimatables(wIdle);
         runGroup?.setWeightForAllAnimatables(wRun);
@@ -130,34 +93,23 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
         if (animState === next) return;
         animState = next;
 
-        fade.active = true;
-        fade.t = 0;
-        fade.dur = 0.25;
-
-        // Snapshot từ weight hiện tại
-        fade.fromIdle = wIdle;
-        fade.fromRun = wRun;
-
+        fade.active = true; fade.t = 0;
+        fade.fromIdle = wIdle; fade.fromRun = wRun;
         fade.toIdle = (next === "idle") ? 1 : 0;
         fade.toRun = (next === "run") ? 1 : 0;
     };
 
-    // Cập nhật fade mỗi frame
     scene.onBeforeRenderObservable.add(() => {
         if (!fade.active) return;
         const dt = scene.getEngine().getDeltaTime() / 1000;
         fade.t = Math.min(fade.t + dt, fade.dur);
         const k = fade.t / fade.dur;
-
         wIdle = fade.fromIdle + (fade.toIdle - fade.fromIdle) * k;
         wRun = fade.fromRun + (fade.toRun - fade.fromRun) * k;
         applyWeights();
-
         if (fade.t >= fade.dur) fade.active = false;
     });
-    // ======================================================================
 
-    // Import GLB nền + thay thế khi xong
     (async () => {
         try {
             const modelUrl = new URL(`${import.meta.env.BASE_URL}${MODEL_PATH}`, window.location.origin).toString();
@@ -165,101 +117,45 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
             const fileName = modelUrl.slice(modelUrl.lastIndexOf("/") + 1);
 
             const { meshes, animationGroups } = await importMeshWithRetry(rootUrl, fileName, scene, 3);
-
-            // Log groups
-            animationGroups.forEach(g => console.log("g.name", g.name)); // Idle, Run, Attack...
-
             const importedRoot = new TransformNode("importedRoot", scene);
             for (const m of meshes) {
                 if (m.name === "__root__") continue;
                 m.setParent(importedRoot);
             }
-
             importedRoot.scaling.setAll(MODEL_SCALE);
-            forceOpaqueMaterials(importedRoot);
-
-            if (FACE_TO_PLUS_Z_DEG !== 0) importedRoot.rotation.y += (FACE_TO_PLUS_Z_DEG * Math.PI) / 180;
-            if (EXTRA_EULER_ROT.lengthSquared() > 0) importedRoot.rotation.addInPlace(EXTRA_EULER_ROT);
-
-            const b = importedRoot.getHierarchyBoundingVectors();
-            importedRoot.position.y -= b.min.y;
-
             importedRoot.parent = player;
-            placeholder.dispose();
 
-            // Tìm groups
             idleGroup = animationGroups.find((g) => /idle/i.test(g.name)) ?? animationGroups[0];
             runGroup = animationGroups.find((g) => /run/i.test(g.name));
 
-            // Play loop cả hai, điều khiển bằng weight
             idleGroup?.start(true);
             runGroup?.start(true);
 
-            // Speed/timing tùy chỉnh (nếu cần)
-            // runGroup && (runGroup.speedRatio = 1.0);
-
-            // Khởi tạo weight
-            wIdle = 1; wRun = 0;
-            applyWeights();
-
-
-
-            animState = "idle";
+            wIdle = 1; wRun = 0; applyWeights();
             animReady = true;
-
         } catch (err) {
-            console.warn("Import GLB failed → giữ placeholder:", err);
+            console.warn("Import GLB failed for local:", err);
         }
     })();
 
-    const SPEED_THRESHOLD = 0.08; // m/s: > ngưỡng => Run, ngược lại Idle
     const setLocomotion = (speed: number) => {
         if (!animReady) return;
-        if (speed > SPEED_THRESHOLD) setState("run");
+        if (speed > 0.08) setState("run");
         else setState("idle");
     };
 
-    // Props tĩnh
-    for (let i = 0; i < 40; i++) {
-        const s = 0.3 + Math.random() * 0.8;
-        const box = MeshBuilder.CreateBox("b" + i, { width: s, height: s, depth: s }, scene);
-        const m = new StandardMaterial("bm" + i, scene);
-        m.diffuseColor = new Color3(0.41, 0.82, 0.57);
-        m.emissiveColor = new Color3(0.0, 0.0, 0.0);
-        box.material = m;
-        const r = 40 + Math.random() * 80, t = Math.random() * Math.PI * 2;
-        box.position = new Vector3(Math.cos(t) * r, s / 2, Math.sin(t) * r);
-        box.freezeWorldMatrix();
-    }
-
-    scene.skipPointerMovePicking = true;
-
-    try { scene.render(); } catch { }
-
-    (scene as any).__cleanupResize = () => {
-        window.removeEventListener("resize", hardResize);
-    };
-
-    // === Input & chuyển state theo di chuyển ===============================
+    // Input
     const keys: Record<string, boolean> = {};
     window.addEventListener("keydown", e => keys[e.code] = true);
     window.addEventListener("keyup", e => keys[e.code] = false);
 
-    let moveSpeed = 3; // m/s
+    let moveSpeed = 3;
     scene.onBeforeRenderObservable.add(() => {
         const forward = (keys["KeyW"] || keys["ArrowUp"]) ? 1 : 0;
         const back = (keys["KeyS"] || keys["ArrowDown"]) ? 1 : 0;
         const left = (keys["KeyA"] || keys["ArrowLeft"]) ? 1 : 0;
         const right = (keys["KeyD"] || keys["ArrowRight"]) ? 1 : 0;
 
-        const moving = forward || back || left || right;
-
-        if (animReady) {
-            if (moving) setState("run");
-            else setState("idle");
-        }
-
-        // Move theo trục world Z+ (tuỳ bạn đổi sang theo camera)
         const dt = scene.getEngine().getDeltaTime() / 1000;
         let vx = (right - left);
         let vz = (forward - back);
@@ -267,16 +163,106 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
         if (vx || vz) {
             const len = Math.hypot(vx, vz);
             vx /= len; vz /= len;
-
-            // quay mặt theo hướng chạy
             const targetYaw = Math.atan2(vx, vz);
             player.rotation.y = targetYaw;
-
-            // bước tiến
             player.position.x += vx * moveSpeed * dt;
             player.position.z += vz * moveSpeed * dt;
+            setLocomotion(moveSpeed);
+        } else {
+            setLocomotion(0);
         }
     });
+
+    // === Remote Players ===================================================
+    type Remote = {
+        root: TransformNode,
+        idle?: AnimationGroup,
+        run?: AnimationGroup,
+        target: Vector3,
+        speed: number
+    };
+    const remotePlayers: Record<string, Remote> = {};
+
+    async function spawnRemotePlayer(id: string) {
+        const root = new TransformNode(`remoteRoot_${id}`, scene);
+        try {
+            const modelUrl = new URL(`${import.meta.env.BASE_URL}${MODEL_PATH}`, window.location.origin).toString();
+            const rootUrl = modelUrl.slice(0, modelUrl.lastIndexOf("/") + 1);
+            const fileName = modelUrl.slice(modelUrl.lastIndexOf("/") + 1);
+
+            const { meshes, animationGroups } = await importMeshWithRetry(rootUrl, fileName, scene, 1);
+            const importedRoot = new TransformNode(`remoteModelRoot_${id}`, scene);
+            for (const m of meshes) {
+                if (m.name === "__root__") continue;
+                m.setParent(importedRoot);
+            }
+            importedRoot.scaling.setAll(MODEL_SCALE);
+            importedRoot.parent = root;
+
+            const idle = animationGroups.find((g) => /idle/i.test(g.name)) ?? animationGroups[0];
+            const run = animationGroups.find((g) => /run/i.test(g.name));
+            idle?.start(true); run?.start(true);
+            idle?.setWeightForAllAnimatables(1); run?.setWeightForAllAnimatables(0);
+
+            remotePlayers[id] = {
+                root,
+                idle,
+                run,
+                target: randomTarget(),
+                speed: 2 + Math.random() * 1.5
+            };
+        } catch (err) {
+            console.warn("Import GLB failed for remote:", err);
+        }
+    }
+
+    function randomTarget() {
+        const range = 20;
+        return new Vector3(
+            (Math.random() - 0.5) * range * 2,
+            0,
+            (Math.random() - 0.5) * range * 2
+        );
+    }
+
+    // Spawn 5 remote players
+    for (let i = 0; i < 50; i++) {
+        spawnRemotePlayer("p" + i);
+    }
+
+
+    scene.onBeforeRenderObservable.add(() => {
+        const dt = scene.getEngine().getDeltaTime() / 1000;
+
+        Object.values(remotePlayers).forEach(r => {
+            if (!r) return;
+            const pos = r.root.position;
+            const dir = r.target.subtract(pos);
+            const dist = dir.length();
+
+            if (dist < 0.5) {
+                // Chọn target mới khi tới gần
+                r.target = randomTarget();
+            } else {
+                dir.normalize();
+                pos.addInPlace(dir.scale(r.speed * dt));
+                r.root.rotation.y = Math.atan2(dir.x, dir.z);
+            }
+
+            // Animation
+            const moving = dist >= 0.5;
+            if (r.idle && r.run) {
+                if (moving) {
+                    r.idle.setWeightForAllAnimatables(0);
+                    r.run.setWeightForAllAnimatables(1);
+                } else {
+                    r.idle.setWeightForAllAnimatables(1);
+                    r.run.setWeightForAllAnimatables(0);
+                }
+            }
+        });
+    });
+
     // ======================================================================
 
     return { engine, scene, camera, player, setLocomotion };
