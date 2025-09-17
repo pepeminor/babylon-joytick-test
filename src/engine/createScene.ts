@@ -1,10 +1,12 @@
 import {
     Engine, Scene, Vector3, Color3, Color4,
     FreeCamera, HemisphericLight, DirectionalLight,
-    MeshBuilder, StandardMaterial, TransformNode, AbstractMesh, AnimationGroup
+    MeshBuilder, StandardMaterial, TransformNode,
+    // AbstractMesh, 
+    AnimationGroup
 } from "@babylonjs/core";
-import { CubeTexture } from "@babylonjs/core/Materials/Textures/cubeTexture";
-import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
+// import { CubeTexture } from "@babylonjs/core/Materials/Textures/cubeTexture";
+// import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { SceneLoader } from "@babylonjs/core/Loading/sceneLoader";
 import { AnimationPropertiesOverride } from "@babylonjs/core/Animations/animationPropertiesOverride";
 import "@babylonjs/loaders/glTF";
@@ -281,29 +283,29 @@ async function importMeshWithRetry(rootUrl: string, fileName: string, scene: Sce
     throw lastErr;
 }
 
-function forceOpaqueMaterials(root: TransformNode) {
-    const meshes = root.getChildMeshes(false) as AbstractMesh[];
-    for (const m of meshes) {
-        const mat = m.material;
-        if (!mat) continue;
+// function forceOpaqueMaterials(root: TransformNode) {
+//     const meshes = root.getChildMeshes(false) as AbstractMesh[];
+//     for (const m of meshes) {
+//         const mat = m.material;
+//         if (!mat) continue;
 
-        if (mat instanceof StandardMaterial) {
-            mat.alpha = 1;
-            (mat as any).useAlphaFromDiffuseTexture = false;
-            if ((mat as any).diffuseTexture) ((mat as any).diffuseTexture as any).hasAlpha = false;
-            mat.backFaceCulling = false;
-            continue;
-        }
+//         if (mat instanceof StandardMaterial) {
+//             mat.alpha = 1;
+//             (mat as any).useAlphaFromDiffuseTexture = false;
+//             if ((mat as any).diffuseTexture) ((mat as any).diffuseTexture as any).hasAlpha = false;
+//             mat.backFaceCulling = false;
+//             continue;
+//         }
 
-        if (mat instanceof PBRMaterial) {
-            mat.alpha = 1;
-            mat.useAlphaFromAlbedoTexture = false;
-            if (mat.albedoTexture) (mat.albedoTexture as any).hasAlpha = false;
-            mat.transparencyMode = PBRMaterial.PBRMATERIAL_OPAQUE;
-            mat.backFaceCulling = false;
-            mat.twoSidedLighting = true;
-            if (mat.metallic === undefined) mat.metallic = 0;
-            if (mat.roughness === undefined) mat.roughness = 0.6;
-        }
-    }
-}
+//         if (mat instanceof PBRMaterial) {
+//             mat.alpha = 1;
+//             mat.useAlphaFromAlbedoTexture = false;
+//             if (mat.albedoTexture) (mat.albedoTexture as any).hasAlpha = false;
+//             mat.transparencyMode = PBRMaterial.PBRMATERIAL_OPAQUE;
+//             mat.backFaceCulling = false;
+//             mat.twoSidedLighting = true;
+//             if (mat.metallic === undefined) mat.metallic = 0;
+//             if (mat.roughness === undefined) mat.roughness = 0.6;
+//         }
+//     }
+// }
