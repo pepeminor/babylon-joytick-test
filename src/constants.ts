@@ -10,3 +10,5 @@ export const MAX_SPEED = 10;
 
 export const JOY_RADIUS = 70;
 export const JOY_DEADZONE = 6;
+
+export const MODEL_PEPE = "/models/pepe-test.glb"

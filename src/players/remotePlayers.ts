@@ -2,18 +2,21 @@ import { Scene, TransformNode, AnimationGroup, Vector3, Scalar } from "@babylonj
 import { importMeshWithRetry } from "../utils";
 
 type Remote = {
+    id: string;
     root: TransformNode;
     idle?: AnimationGroup;
     run?: AnimationGroup;
     target: Vector3;
     yaw: number;
     state: "idle" | "run" | "attack";
+    weights: { idle: number; run: number }; // blend mềm
+    justSpawned?: boolean
 };
 
-const remotes: Record<string, Remote> = {};
+export const remotes: Record<string, Remote> = {};
 
 // === Spawn ===
-export async function spawnRemote(scene: Scene, id: string, modelUrl: string) {
+export async function spawnRemotePlayer(scene: Scene, id: string, modelUrl: string, initState?: { pos: [number, number, number]; yaw: number; state: string }) {
     if (remotes[id]) return remotes[id]; // tránh trùng
 
     const root = new TransformNode("remote_" + id, scene);
@@ -28,51 +31,97 @@ export async function spawnRemote(scene: Scene, id: string, modelUrl: string) {
 
     const idle = animationGroups.find((g) => /idle/i.test(g.name)) ?? animationGroups[0];
     const run = animationGroups.find((g) => /run/i.test(g.name));
+
     idle?.start(true);
     run?.start(true);
     idle?.setWeightForAllAnimatables(1);
     run?.setWeightForAllAnimatables(0);
 
-    remotes[id] = { root, idle, run, target: root.position.clone(), yaw: 0, state: "idle" };
+    remotes[id] = {
+        id,
+        root,
+        idle,
+        run,
+        target: initState
+            ? new Vector3(initState.pos[0], initState.pos[1], initState.pos[2])
+            : root.position.clone(),
+        yaw: initState ? initState.yaw : 0,
+        state: initState ? initState.state as any : "idle",
+        weights: { idle: 1, run: 0 },
+        justSpawned: true
+    };
+
+    if (initState) {
+        const pos = new Vector3(initState.pos[0], 0, initState.pos[2]);
+        root.position.copyFrom(pos);
+        remotes[id].target = pos.clone();
+        root.rotation.y = initState.yaw;
+    }
+
+    console.log("ahahaha", initState
+        ? new Vector3(initState.pos[0], initState.pos[1], initState.pos[2])
+        : root.position.clone(),)
+
     return remotes[id];
 }
 
 // === Update từ server ===
-export function updateRemoteFromServer(id: string, data: { pos: [number, number, number]; yaw: number; state: string }) {
+export function updateRemotePlayerFromServer(
+    id: string,
+    data: { pos: [number, number, number]; yaw: number; state: string }
+) {
     const r = remotes[id];
     if (!r) return;
-    r.target.copyFromFloats(...data.pos);
+    console.log("🔄 Remote update:", id, data.pos, data.state);
+    r.target.copyFromFloats(data.pos[0], 0, data.pos[2]);
     r.yaw = data.yaw;
     r.state = (data.state as any) || "idle";
 }
 
 // === Update mỗi frame ===
-export function updateRemotes(scene: Scene) {
+export function updateRemotePlayers(scene: Scene) {
     const dt = scene.getEngine().getDeltaTime() / 1000;
     const interp = Math.min(1, dt * 10);
 
     Object.values(remotes).forEach((r) => {
-        r.root.position = Vector3.Lerp(r.root.position, r.target, interp);
+
+        if (r.justSpawned) {
+            r.justSpawned = false;
+            r.root.position.copyFrom(r.target); // sync cứng tick đầu
+            r.root.rotation.y = r.yaw;
+            return;
+        }
+
+        // position & rotation smoothing
+        Vector3.LerpToRef(r.root.position, r.target, interp, r.root.position);
         r.root.rotation.y = Scalar.LerpAngle(r.root.rotation.y, r.yaw, interp);
 
-        if (r.idle && r.run) {
-            if (r.state === "run") {
-                r.idle.setWeightForAllAnimatables(0);
-                r.run.setWeightForAllAnimatables(1);
-            } else {
-                r.idle.setWeightForAllAnimatables(1);
-                r.run.setWeightForAllAnimatables(0);
-            }
+        // animation blending
+        const blendSpeed = 5 * dt;
+        if (r.state === "run") {
+            r.weights.idle = Scalar.Clamp(r.weights.idle - blendSpeed, 0, 1);
+            r.weights.run = Scalar.Clamp(r.weights.run + blendSpeed, 0, 1);
+        } else {
+            r.weights.idle = Scalar.Clamp(r.weights.idle + blendSpeed, 0, 1);
+            r.weights.run = Scalar.Clamp(r.weights.run - blendSpeed, 0, 1);
         }
+
+        r.idle?.setWeightForAllAnimatables(r.weights.idle);
+        r.run?.setWeightForAllAnimatables(r.weights.run);
     });
 }
-
-// === Despawn (remove player) ===
-export function despawnRemote(id: string) {
+export function despawnRemotePlayer(id: string) {
     const r = remotes[id];
-    if (!r) return;
+    if (!r) {
+        console.warn("⚠️ despawnRemotePlayer: no remote found for", id);
+        return;
+    }
 
-    r.root.getChildMeshes().forEach(m => m.dispose());
+    r.root.getChildMeshes().forEach((m) => m.dispose());
+    r.idle?.dispose();
+    r.run?.dispose();
     r.root.dispose();
+
     delete remotes[id];
+    console.log("✅ Removed remote player", id);
 }

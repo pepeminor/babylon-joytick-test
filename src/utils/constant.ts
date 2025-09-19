@@ -1,1 +1,0 @@
-export const MODEL_PEPE = "/models/pepe-test.glb"

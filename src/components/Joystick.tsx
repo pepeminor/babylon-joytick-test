@@ -29,6 +29,7 @@ export function Joystick(props: {
                 height: radius * 2 + 16,
                 zIndex: 30,
                 touchAction: "none",
+                userSelect: "none",
             }}
         >
             <div style={{

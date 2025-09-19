@@ -8,6 +8,8 @@ import { useJoystick } from "./hooks/useJoystick";
 import { LOOK_LERP, ACCEL, DEACCEL, MAX_SPEED } from "./constants";
 import { Joystick } from "./components/Joystick";
 import { DebugOverlay, type DebugInfo } from "./components/DebugOverlay";
+import { connectGameServer } from "./network/connectGameServer";
+import { OPCODES } from "./opcodes";
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -31,6 +33,10 @@ export default function App() {
 
   // StrictMode guard
   const startedRef = useRef(false);
+  const socketRef = useRef<any | null>(null);
+  const lastSentRef = useRef<{ x: number; y: number; z: number; yaw: number; state: string }>({
+    x: 0, y: 0, z: 0, yaw: 0, state: "idle",
+  });
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -47,7 +53,9 @@ export default function App() {
     const { engine, scene, camera, player, setLocomotion } = createScene(canvas);
     engine.resize();
     try { scene.render(); } catch { }
-
+    connectGameServer(scene).then(({ socket }) => {
+      socketRef.current = socket;
+    });
     // === Camera state: SEED curPos = vị trí camera hiện tại (fix màn đen đầu)
     const camState: CamState = {
       yaw: 0,
@@ -74,9 +82,13 @@ export default function App() {
     const onResize = () => engine.resize();
     window.addEventListener("resize", onResize);
 
+    let accum = 0;
+
+
     const loop = () => {
       const dt = Math.min(0.05, engine.getDeltaTime() / 1000);
 
+      accum += dt;
       // smooth look
       const k = 1 - Math.exp(-LOOK_LERP * dt);
       camState.yaw += (camState.desiredYaw - camState.yaw) * k;
@@ -131,6 +143,36 @@ export default function App() {
         let d = targetYaw - curYaw;
         d = Math.atan2(Math.sin(d), Math.cos(d));
         player.rotation.y += d * Math.min(1, dt * 8);
+      }
+
+      if (socketRef.current && accum > 0.1) {
+        accum = 0;
+
+        const cur = {
+          x: player.position.x,
+          y: 0,
+          z: player.position.z,
+          yaw: player.rotation.y,
+          state: spd > 0.1 ? "run" : "idle",
+        };
+
+        const last = lastSentRef.current;
+        const moved =
+          Math.hypot(cur.x - last.x, cur.y - last.y, cur.z - last.z) > 0.01 ||
+          Math.abs(cur.yaw - last.yaw) > 0.02 ||
+          cur.state !== last.state;
+
+        if (moved) {
+          socketRef.current.send(JSON.stringify({
+            op: OPCODES.UPDATE,
+            type: "update",
+            id: player.id,
+            pos: [cur.x, 0, cur.z],
+            yaw: cur.yaw,
+            state: cur.state,
+          }));
+          lastSentRef.current = cur;
+        }
       }
 
       // camera follow

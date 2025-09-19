@@ -19,20 +19,19 @@ export function createLocalPlayer(scene: Scene, modelPath: string) {
     };
 
     function setLocomotion(speed: number) {
-        if (!animReady) return;
-        if (speed > 0.1 && state !== "run") {
-            state = "run";
-            targetIdle = 0;
-            targetRun = 1;
-        } else if (speed <= 0.1 && state !== "idle") {
-            state = "idle";
-            targetIdle = 1;
-            targetRun = 0;
+        if (speed > 0.1) {
+            if (state !== "run") {
+                state = "run";
+                targetIdle = 0;
+                targetRun = 1;
+            }
+        } else {
+            if (state !== "idle") {
+                state = "idle";
+                targetIdle = 1;
+                targetRun = 0;
+            }
         }
-    }
-
-    function getAnimState() {
-        return state;
     }
 
     // load model
@@ -50,8 +49,8 @@ export function createLocalPlayer(scene: Scene, modelPath: string) {
             importedRoot.scaling.setAll(0.1);
             importedRoot.parent = player;
 
-            idle = animationGroups.find(g => /idle/i.test(g.name)) ?? animationGroups[0];
-            run = animationGroups.find(g => /run/i.test(g.name));
+            idle = animationGroups.find((g) => /idle/i.test(g.name)) ?? animationGroups[0];
+            run = animationGroups.find((g) => /run/i.test(g.name));
 
             idle?.start(true);
             run?.start(true);
@@ -62,15 +61,18 @@ export function createLocalPlayer(scene: Scene, modelPath: string) {
         }
     })();
 
-    // chỉ lo blend animation thôi
+    // update loop
     scene.onBeforeRenderObservable.add(() => {
         if (!animReady) return;
+
         const dt = scene.getEngine().getDeltaTime() / 1000;
         const blendSpeed = 5;
+
+        // blend animation
         wIdle += (targetIdle - wIdle) * blendSpeed * dt;
         wRun += (targetRun - wRun) * blendSpeed * dt;
         applyWeights();
     });
 
-    return { player, setLocomotion, getAnimState };
+    return { player, setLocomotion };
 }
