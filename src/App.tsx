@@ -30,8 +30,6 @@ export default function App() {
   // debug state
   const [debug, setDebug] = useState<DebugInfo>({ fps: 0, dt: 0, speed: 0, yaw: 0, pitch: 0, px: 0, py: 0, pz: 0 });
   const lastDebugPush = useRef(0);
-
-  // StrictMode guard
   const startedRef = useRef(false);
   const socketRef = useRef<any | null>(null);
   const lastSentRef = useRef<{ x: number; y: number; z: number; yaw: number; state: string }>({
@@ -62,7 +60,7 @@ export default function App() {
       pitch: -0.12,
       distance: 5.5,
       target: new Vector3(),
-      curPos: camera.position.clone(),     // 🔧 quan trọng
+      curPos: camera.position.clone(), 
       desiredYaw: 0,
       desiredPitch: -0.12,
     };
@@ -216,7 +214,7 @@ export default function App() {
       (scene as any).__cleanupResize?.();
       engine.dispose();
     };
-  }, []); // chạy đúng 1 lần (đã có guard)
+  }, []);
 
   return (
     <div

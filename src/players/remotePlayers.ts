@@ -24,6 +24,7 @@ export async function spawnRemotePlayer(scene: Scene, id: string, modelUrl: stri
     const fileName = modelUrl.slice(modelUrl.lastIndexOf("/") + 1);
     const { meshes, animationGroups } = await importMeshWithRetry(rootUrl, fileName, scene, 1);
 
+    console.log({animationGroups});
     const imported = new TransformNode("remoteModel_" + id, scene);
     for (const m of meshes) if (m.name !== "__root__") m.setParent(imported);
     imported.scaling.setAll(0.1);
@@ -58,10 +59,6 @@ export async function spawnRemotePlayer(scene: Scene, id: string, modelUrl: stri
         root.rotation.y = initState.yaw;
     }
 
-    console.log("ahahaha", initState
-        ? new Vector3(initState.pos[0], initState.pos[1], initState.pos[2])
-        : root.position.clone(),)
-
     return remotes[id];
 }
 
@@ -72,7 +69,6 @@ export function updateRemotePlayerFromServer(
 ) {
     const r = remotes[id];
     if (!r) return;
-    console.log("🔄 Remote update:", id, data.pos, data.state);
     r.target.copyFromFloats(data.pos[0], 0, data.pos[2]);
     r.yaw = data.yaw;
     r.state = (data.state as any) || "idle";
@@ -87,7 +83,7 @@ export function updateRemotePlayers(scene: Scene) {
 
         if (r.justSpawned) {
             r.justSpawned = false;
-            r.root.position.copyFrom(r.target); // sync cứng tick đầu
+            r.root.position.copyFrom(r.target); 
             r.root.rotation.y = r.yaw;
             return;
         }
@@ -123,5 +119,4 @@ export function despawnRemotePlayer(id: string) {
     r.root.dispose();
 
     delete remotes[id];
-    console.log("✅ Removed remote player", id);
 }

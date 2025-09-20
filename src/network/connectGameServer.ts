@@ -10,7 +10,7 @@ if (!deviceId) {
 }
 
 // Tạo socket
-const socket = new WebSocket("ws://localhost:7350");
+const socket = new WebSocket("ws://103.90.224.200:7350");
 
 // Hàm gửi update
 export function sendUpdate(
