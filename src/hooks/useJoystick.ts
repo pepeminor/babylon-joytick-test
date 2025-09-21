@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Vector3 } from "@babylonjs/core";
-import { JOY_RADIUS as R_DEFAULT, JOY_DEADZONE as DZ_DEFAULT } from "../constants";
+import { JOY_RADIUS as R_DEFAULT, JOY_DEADZONE as DZ_DEFAULT } from "../config";
 
 export function useJoystick(opts?: { radius?: number; deadzone?: number }) {
     const JOY_RADIUS = opts?.radius ?? R_DEFAULT;

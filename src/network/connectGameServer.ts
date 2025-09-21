@@ -10,7 +10,8 @@ if (!deviceId) {
 }
 
 // Tạo socket
-const socket = new WebSocket("wss://admitted-miss-advocacy-transmitted.trycloudflare.com/");
+const socket = new WebSocket("wss://admitted-miss-advocacy-transmitted.trycloudflare.com");
+// const socket = new WebSocket("ws://localhost:7350");
 
 // Hàm gửi update
 export function sendUpdate(

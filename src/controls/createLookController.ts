@@ -1,5 +1,5 @@
 import { FreeCamera, Vector3 } from "@babylonjs/core";
-import { LOOK_SENS, PITCH_MIN, PITCH_MAX } from "../constants";
+import { LOOK_SENS, PITCH_MIN, PITCH_MAX } from "../config";
 
 export type CamState = {
     yaw: number; pitch: number; distance: number;

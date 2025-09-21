@@ -5,11 +5,11 @@ import { createLookController, type CamState } from "./controls/createLookContro
 import { useKeys } from "./hooks/useKeys";
 import { useScrollLock } from "./hooks/useScrollLock";
 import { useJoystick } from "./hooks/useJoystick";
-import { LOOK_LERP, ACCEL, DEACCEL, MAX_SPEED } from "./constants";
 import { Joystick } from "./components/Joystick";
 import { DebugOverlay, type DebugInfo } from "./components/DebugOverlay";
 import { connectGameServer } from "./network/connectGameServer";
 import { OPCODES } from "./opcodes";
+import { ACCEL, DEACCEL, LOOK_LERP, MAX_SPEED } from "./config";
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);

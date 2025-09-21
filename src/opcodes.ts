@@ -7,4 +7,5 @@ export const OPCODES = {
     DAMAGE: 6,
     WEAPON_CHANGE: 7,
     CHAT: 8,
+    BATCH_UPDATE: 9,
 } as const;
