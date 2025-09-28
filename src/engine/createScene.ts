@@ -10,6 +10,7 @@ export function createScene(canvas: HTMLCanvasElement) {
   const { engine, scene, camera } = setupScene(canvas);
 
   const { player, setLocomotion } = createLocalPlayer(scene, MODEL_PATH);
+  player.getChildMeshes(false).forEach(m => (m.renderingGroupId = 0));
 
   localGhostManager = new GhostManager(scene);
   scene.onBeforeRenderObservable.add(() =>

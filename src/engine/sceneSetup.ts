@@ -1,3 +1,4 @@
+// sceneSetup.ts
 import {
   Engine,
   Scene,
@@ -9,10 +10,13 @@ import {
   Color3,
   MeshBuilder,
   StandardMaterial,
-//   GlowLayer,
+  Texture,
+  Layer,
+  ShaderMaterial,
 } from "@babylonjs/core";
 
 export function setupScene(canvas: HTMLCanvasElement) {
+  // --- Engine ---
   const engine = new Engine(canvas, true, {
     antialias: true,
     stencil: true,
@@ -28,34 +32,113 @@ export function setupScene(canvas: HTMLCanvasElement) {
   resize();
   window.addEventListener("resize", resize);
 
+  // --- Scene ---
   const scene = new Scene(engine);
   scene.clearColor = new Color4(0.06, 0.07, 0.09, 1);
 
+  // --- Camera ---
   const camera = new FreeCamera("cam", new Vector3(0, 1.6, 8), scene);
   camera.minZ = 0.01;
-  camera.maxZ = 500;
+  camera.maxZ = 2000;
   camera.setTarget(new Vector3(0, 0.9, 0));
 
+  // --- Lights ---
   const hemi = new HemisphericLight("hemi", new Vector3(0, 1, 0), scene);
   hemi.intensity = 0.55;
   const dir = new DirectionalLight("dir", new Vector3(-1, -2, -1), scene);
   dir.position = new Vector3(8, 12, 6);
   dir.intensity = 0.9;
 
+  // --- Ground: neon grid ---
   const ground = MeshBuilder.CreateGround(
     "ground",
     { width: 400, height: 400 },
     scene
   );
   const gmat = new StandardMaterial("gmat", scene);
-  gmat.diffuseColor = new Color3(0.06, 0.07, 0.09);
-  gmat.specularColor = new Color3(0, 0, 0);
-  gmat.emissiveColor = new Color3(0.06, 0.07, 0.09);
+  const gridTex = new Texture("/textures/neon-grid.png", scene);
+  gridTex.uScale = 20;
+  gridTex.vScale = 20;
+  gmat.emissiveTexture = gridTex;
+  gmat.diffuseColor = Color3.Black();
+  gmat.specularColor = Color3.Black();
   ground.material = gmat;
   ground.freezeWorldMatrix();
+  ground.renderingGroupId = 0; // ground & player > sun
 
-//   const glow = new GlowLayer("glow", scene);
-//   glow.intensity = 0.7;
+  // --- Sky (background image) ---
+  new Layer("sky", "/textures/retro-sky.jpg", scene, true);
 
-  return { engine, scene, camera };
+  // --- SUN với glow procedural shader ---
+  const sun = MeshBuilder.CreateDisc(
+    "sun",
+    { radius: 110, tessellation: 64 },
+    scene
+  );
+  sun.position = new Vector3(0, 120, 900);
+  sun.renderingGroupId = 0;
+
+  const sunShader = new ShaderMaterial(
+    "sunShader",
+    scene,
+    {
+      vertexSource: `
+      precision highp float;
+      attribute vec3 position;
+      attribute vec2 uv;
+      uniform mat4 worldViewProjection;
+      varying vec2 vUV;
+      void main(void) {
+        gl_Position = worldViewProjection * vec4(position, 1.0);
+        vUV = uv;
+      }
+    `,
+      fragmentSource: `
+      precision highp float;
+      varying vec2 vUV;
+
+      void main(void) {
+        // map vUV từ [0..1] sang [-1..1]
+        vec2 p = vUV * 2.0 - 1.0;
+        float r = length(p);
+
+        // Nếu ngoài vòng tròn -> bỏ pixel
+        if (r > 1.0) discard;
+
+        // Gradient vàng -> cam -> hồng
+        float y = vUV.y;
+        vec3 top = vec3(1.0, 0.85, 0.25);
+        vec3 mid = vec3(1.0, 0.55, 0.20);
+        vec3 bot = vec3(1.0, 0.25, 0.55);
+        vec3 color = mix(bot, mid, smoothstep(0.0, 0.5, y));
+        color = mix(color, top, smoothstep(0.5, 1.0, y));
+
+        // Sọc ngang
+        float bands = step(0.5, fract(y * 18.0));
+        color *= (1.0 - 0.55 * bands);
+
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `,
+    },
+    {
+      attributes: ["position", "uv"],
+      uniforms: ["worldViewProjection"],
+    }
+  );
+
+  // Tắt blend & depth
+  sunShader.alphaMode = Engine.ALPHA_DISABLE;
+  sunShader.needAlphaBlending = () => false;
+  sunShader.backFaceCulling = false;
+  sunShader.disableDepthWrite = true;
+
+  sun.material = sunShader;
+
+  // --- Fog tím xanh (nhẹ) ---
+  scene.fogMode = Scene.FOGMODE_EXP2;
+  scene.fogDensity = 0.015;
+  scene.fogColor = new Color3(0.1, 0.05, 0.2);
+
+  return { engine, scene, camera, sun };
 }
