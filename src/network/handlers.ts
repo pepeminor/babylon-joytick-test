@@ -1,5 +1,5 @@
 import { MODEL_PEPE } from "../config";
-import { localGhostManager } from "../engine/createScene";
+import { getLocalGhostManager } from "../engine/createScene";
 import { OPCODES } from "../opcodes";
 import {
   spawnRemotePlayer,
@@ -80,7 +80,7 @@ export const handlers: Record<number, (args: HandlerArgs) => void> = {
 
   [OPCODES.LEAVE]: ({ msg }) => {
     despawnRemotePlayer(msg.id);
-    localGhostManager.remove(msg.id);
+    getLocalGhostManager()?.remove(msg.id);
   },
 
   [OPCODES.WEAPON_CHANGE]: ({ msg }) => {

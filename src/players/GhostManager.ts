@@ -9,30 +9,26 @@ import {
 
 type Ghost = { mesh: Mesh };
 
-export class GhostManager {
-  private scene: Scene;
-  private ghosts: Record<string, Ghost> = {};
+export type GhostManager = ReturnType<typeof createGhostManager>;
 
-  constructor(scene: Scene) {
-    this.scene = scene;
-  }
+export function createGhostManager(scene: Scene) {
+  const ghosts: Record<string, Ghost> = {};
 
-  // === Spawn ghost ===
-  spawn(id: string, pos: Vector3) {
-    if (this.ghosts[id]) return;
+  function spawn(id: string, pos: Vector3) {
+    if (ghosts[id]) return;
 
-    const parent = new Mesh("ghostRoot_" + id, this.scene);
+    const parent = new Mesh("ghostRoot_" + id, scene);
     parent.position.copyFrom(pos);
 
     for (let i = 0; i < 3; i++) {
       const cube = MeshBuilder.CreateBox(
         "ghostCube_" + id + "_" + i,
         { size: 0.14 },
-        this.scene
+        scene
       );
       cube.parent = parent;
 
-      const mat = new StandardMaterial("ghostMat_" + id + "_" + i, this.scene);
+      const mat = new StandardMaterial("ghostMat_" + id + "_" + i, scene);
       mat.emissiveColor = new Color3(0.6, 1, 0.6);
       mat.alpha = 0.6;
       cube.material = mat;
@@ -40,20 +36,20 @@ export class GhostManager {
       cube.metadata = { phase: Math.random() * Math.PI * 2 };
     }
 
-    this.ghosts[id] = { mesh: parent };
+    ghosts[id] = { mesh: parent };
   }
 
-  remove(id: string) {
-    const g = this.ghosts[id];
+  function remove(id: string) {
+    const g = ghosts[id];
     if (!g) return;
 
     g.mesh.getChildMeshes().forEach((m) => m.dispose());
     g.mesh.dispose();
-    delete this.ghosts[id];
+    delete ghosts[id];
   }
 
-  update(id: string, pos: Vector3, time: number) {
-    const g = this.ghosts[id];
+  function update(id: string, pos: Vector3, time: number) {
+    const g = ghosts[id];
     if (!g) return;
 
     g.mesh.position.copyFrom(pos);
@@ -77,4 +73,6 @@ export class GhostManager {
       cube.rotation.y += 0.05;
     });
   }
+
+  return { spawn, remove, update };
 }

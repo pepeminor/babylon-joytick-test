@@ -1,7 +1,7 @@
 import { Vector3 } from "@babylonjs/core";
 import { remotes } from "../players/remotePlayers";
 import { AOI_CLIENT_CONFIG } from "../config";
-import { localGhostManager } from "../engine/createScene";
+import { getLocalGhostManager } from "../engine/createScene";
 
 export function filterVisibleRemotes(myPos: Vector3) {
   const time = performance.now() * 0.002;
@@ -11,17 +11,19 @@ export function filterVisibleRemotes(myPos: Vector3) {
     remote: r,
   }));
 
+  const ghostManager = getLocalGhostManager();
+
   for (const e of entries) {
     if (e.dist <= AOI_CLIENT_CONFIG.modelDistance) {
       e.remote.root.setEnabled(true);
-      localGhostManager.remove(e.id);
+      ghostManager?.remove(e.id);
     } else if (e.dist <= AOI_CLIENT_CONFIG.maxRenderDistance) {
       e.remote.root.setEnabled(false);
-      localGhostManager.spawn(e.id, e.remote.root.position);
-      localGhostManager.update(e.id, e.remote.root.position, time);
+      ghostManager?.spawn(e.id, e.remote.root.position);
+      ghostManager?.update(e.id, e.remote.root.position, time);
     } else {
       e.remote.root.setEnabled(false);
-      localGhostManager.remove(e.id);
+      ghostManager?.remove(e.id);
     }
   }
 }

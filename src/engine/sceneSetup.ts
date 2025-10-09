@@ -31,6 +31,9 @@ export function setupScene(canvas: HTMLCanvasElement) {
   };
   resize();
   window.addEventListener("resize", resize);
+  const cleanupResize = () => {
+    window.removeEventListener("resize", resize);
+  };
 
   // --- Scene ---
   const scene = new Scene(engine);
@@ -139,6 +142,8 @@ export function setupScene(canvas: HTMLCanvasElement) {
   scene.fogMode = Scene.FOGMODE_EXP2;
   scene.fogDensity = 0.015;
   scene.fogColor = new Color3(0.1, 0.05, 0.2);
+
+  (scene as any).__cleanupResize = cleanupResize;
 
   return { engine, scene, camera, sun };
 }
