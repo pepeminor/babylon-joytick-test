@@ -10,36 +10,53 @@ export default defineConfig({
 
       strategies: "generateSW",
 
+      // ❌ QUAN TRỌNG: disable tự động include public assets
+      injectRegister: "inline",
+
       workbox: {
-        // ❌ NO precache file to
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB ✅ BẮT BUỘC
+        cleanupOutdatedCaches: true,
+
+        // ❌ KHÔNG precache bất kỳ asset game nào
         globPatterns: [
-          "**/*.{html,css,ico,png,svg,webmanifest}"
+          "**/*.{html,css,js,webmanifest}"
+        ],
+
+        // ❌ CHẶN TOÀN BỘ TEXTURE / ASSET GAME
+        globIgnores: [
+          "**/textures/**",
+          "**/*.png",
+          "**/*.jpg",
+          "**/*.jpeg",
+          "**/*.webp",
+          "**/*.ktx",
+          "**/*.ktx2",
+          "**/*.dds",
+          "**/*.hdr",
+          "**/*.exr",
+          "**/*.glb",
+          "**/*.gltf",
+          "**/*.bin"
         ],
 
         runtimeCaching: [
           {
             urlPattern: ({ request }) =>
-              request.destination === "script" ||
-              request.destination === "worker",
+              request.destination === "script",
             handler: "NetworkFirst",
             options: {
-              cacheName: "js-runtime",
-              expiration: {
-                maxEntries: 20,
-                maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
-              }
+              cacheName: "js-runtime"
             }
           },
           {
             urlPattern: ({ request }) =>
-              request.destination === "image" ||
-              request.destination === "texture",
+              request.destination === "image",
             handler: "CacheFirst",
             options: {
-              cacheName: "assets-cache",
+              cacheName: "game-textures",
               expiration: {
                 maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                maxAgeSeconds: 60 * 60 * 24 * 30
               }
             }
           }
@@ -49,11 +66,11 @@ export default defineConfig({
       manifest: {
         name: "PEPE Web3 Game",
         short_name: "PEPE",
+        start_url: "/",
         display: "fullscreen",
         orientation: "landscape",
         background_color: "#000000",
         theme_color: "#000000",
-        start_url: "/",
         icons: [
           { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "/icon-512.png", sizes: "512x512", type: "image/png" }
