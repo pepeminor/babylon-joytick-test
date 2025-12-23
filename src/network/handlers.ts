@@ -6,6 +6,7 @@ import {
   despawnRemotePlayer,
   updateRemotePlayerFromServer,
   remotes,
+  triggerRemoteAttack,
 } from "../players/remotePlayers";
 import { sendUpdate } from "./connectGameServer";
 
@@ -16,7 +17,7 @@ type HandlerArgs = {
   socket: WebSocket;
 };
 
-export const handlers: Record<number, (args: HandlerArgs) => void> = {
+export const handlers: Record<string, (args: HandlerArgs) => void> = {
   [OPCODES.JOIN]: ({ msg, scene, myIdRef }) => {
     if (msg.id !== myIdRef.current) {
       spawnRemotePlayer(scene, msg.id, MODEL_PEPE, {
@@ -27,29 +28,37 @@ export const handlers: Record<number, (args: HandlerArgs) => void> = {
     }
   },
   [OPCODES.WELCOME]: ({ msg, scene, myIdRef, socket }) => {
+    // Set local player ID
     myIdRef.current = msg.id;
 
-    // Build snapshot set
+    // --- 🔥 FIX GHOST PLAYERS: clear everything on welcome ---
+    for (const rid of Object.keys(remotes)) {
+      despawnRemotePlayer(rid);
+    }
+
+    // Build snapshot players
     const snapshotIds = new Set<string>();
     for (const [otherId, info] of Object.entries<any>(msg.snapshot)) {
       snapshotIds.add(otherId);
+
       if (otherId !== myIdRef.current) {
         spawnRemotePlayer(scene, otherId, MODEL_PEPE, {
           pos: info.pos,
           yaw: info.yaw,
           state: info.state,
         });
+
       }
     }
 
-    // Despawn any leftovers
-    for (const id of Object.keys(remotes)) {
-      if (!snapshotIds.has(id) && id !== myIdRef.current) {
-        // console.log("🗑️ Despawning leftover", id);
-        despawnRemotePlayer(id);
+    // Ensure no leftovers (just safety, snapshot already handled)
+    for (const rid of Object.keys(remotes)) {
+      if (!snapshotIds.has(rid) && rid !== myIdRef.current) {
+        despawnRemotePlayer(rid);
       }
     }
 
+    // Start sending movement updates
     sendUpdate(socket, myIdRef.current!, {
       pos: [0, 0, 0],
       yaw: 0,
@@ -76,6 +85,17 @@ export const handlers: Record<number, (args: HandlerArgs) => void> = {
         });
       }
     }
+  },
+
+  [OPCODES.ATTACK]: ({ msg }) => {
+    const r = remotes[msg.id];
+    if (!r) return;
+
+    triggerRemoteAttack(r, {
+      pos: msg.pos,
+      yaw: msg.yaw,
+      duration: msg.duration,
+    });
   },
 
   [OPCODES.LEAVE]: ({ msg }) => {

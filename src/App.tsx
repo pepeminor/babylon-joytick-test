@@ -11,9 +11,11 @@ import { DebugOverlay, type DebugInfo } from "./components/DebugOverlay";
 import { sendUpdate } from "./network/connectGameServer";
 import { useGameServer } from "./hooks/useGameServer";
 import { ACCEL, DEACCEL, LOOK_LERP, MAX_SPEED } from "./config";
+import { useCombatStore } from "./store/combatStore";
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   // UI toggles
   const [debugOn, setDebugOn] = useState(false);
@@ -33,7 +35,7 @@ export default function App() {
   const lastDebugPushRef = useRef(0);
   const startedRef = useRef(false);
   const [sceneState, setSceneState] = useState<Scene | null>(null);
-  const {socketRef: serverSocketRef, error: serverError, disconnect: disconnectServer} = useGameServer(sceneState);
+  const { socketRef: serverSocketRef, error: serverError, disconnect: disconnectServer } = useGameServer(sceneState);
   const lastSentRef = useRef<{ x: number; y: number; z: number; yaw: number; state: string }>({
     x: 0, y: 0, z: 0, yaw: 0, state: "idle",
   });
@@ -42,30 +44,64 @@ export default function App() {
     if (serverError) {
       console.error("❌ Game server error:", serverError);
     }
-  }, [serverError]);
+  }, []);
 
   useEffect(() => {
-    if (startedRef.current) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    let mounted = true;
 
-    startedRef.current = true;
-    const cleanup = setupRuntime({
-      canvas,
-      debugOnRef,
-      lockDragRef,
-      keysRef: keys,
-      joyVecRef: joyVec,
-      setDebug,
-      lastDebugPushRef,
-      lastSentRef,
-      serverSocketRef,
-      disconnectServer,
-      setSceneState,
+    const run = async () => {
+      if (startedRef.current || !canvasRef.current) return;
+
+      startedRef.current = true;
+
+      const cleanup = await setupRuntime({
+        canvas: canvasRef.current,
+        debugOnRef,
+        lockDragRef,
+        keysRef: keys,
+        joyVecRef: joyVec,
+        lastDebugPushRef,
+        lastSentRef,
+        setDebug,
+        serverSocketRef,
+        disconnectServer,
+        setSceneState,
+      });
+
+      // Nếu component vẫn còn mounted → giữ cleanup
+      if (mounted) {
+        cleanupRef.current = cleanup;
+      }
+    };
+
+    run();
+
+    return () => {
+      mounted = false;
+      cleanupRef.current?.();
+    };
+  }, [disconnectServer, keys, joyVec, serverSocketRef, setDebug, setSceneState]);
+
+  useEffect(() => {
+    let lastTick = useCombatStore.getState().attackTick;
+
+    const unsub = useCombatStore.subscribe((state) => {
+      if (state.attackTick !== lastTick) {
+        lastTick = state.attackTick;
+
+        const sock = serverSocketRef.current;
+        if (!sock || sock.readyState !== WebSocket.OPEN) return;
+
+        sock.send(JSON.stringify({
+          type: "attack",
+        }));
+
+        // console.log("📤 ATTACK SENT TO SERVER");
+      }
     });
 
-    return cleanup;
-  }, [disconnectServer, keys, joyVec, serverSocketRef, setDebug, setSceneState]);
+    return unsub;
+  }, []);
 
   return (
     <div
@@ -97,6 +133,8 @@ export default function App() {
         onMove={onJoyMove}
         onEnd={onJoyEnd}
       />
+
+      {/* {weaponDebug && <WeaponDebug weapon={weaponDebug} />} */}
     </div>
   );
 }
@@ -117,24 +155,24 @@ type RuntimeParams = {
   setSceneState: (scene: Scene | null | ((prev: Scene | null) => Scene | null)) => void;
 };
 
-function setupRuntime({
+async function setupRuntime({
   canvas,
   debugOnRef,
   lockDragRef,
   keysRef,
   joyVecRef,
-  setDebug,
   lastDebugPushRef,
   lastSentRef,
   serverSocketRef,
   disconnectServer,
   setSceneState,
+  setDebug,
 }: RuntimeParams) {
   canvas.style.touchAction = "none";
   canvas.style.userSelect = "none";
   canvas.style.setProperty("-webkit-touch-callout", "none");
 
-  const {engine, scene, camera, player, setLocomotion} = createScene(canvas);
+  const { engine, scene, camera, player, setLocomotion } = await createScene(canvas);
   engine.resize();
   try {
     scene.render();
@@ -210,24 +248,44 @@ function setupRuntime({
       iY /= mag;
     }
 
-    moveDir.copyFrom(camForward).scaleInPlace(iY);
-    camRight.scaleToRef(iX, moveContribution);
-    moveDir.addInPlace(moveContribution);
+    if ((player as any).isAttacking?.()) {
+      // ❌ không cho di chuyển
+      // console.log("attacking");
+      // vel.set(0, 0, 0);
+      // setLocomotion(0);
+      vel.scaleInPlace(0.95);
 
-    if (moveDir.lengthSquared() > 0) {
-      moveDir.normalize();
-      moveContribution.copyFrom(moveDir).scaleInPlace(ACCEL * dt);
-      vel.addInPlace(moveContribution);
     } else {
-      const sp = vel.length();
-      if (sp > 0) {
-        const dec = Math.max(sp - DEACCEL * dt, 0);
-        vel.normalize().scaleInPlace(dec);
+      moveDir.copyFrom(camForward).scaleInPlace(iY);
+      camRight.scaleToRef(iX, moveContribution);
+      moveDir.addInPlace(moveContribution);
+
+      if (moveDir.lengthSquared() > 0) {
+        moveDir.normalize();
+        moveContribution.copyFrom(moveDir).scaleInPlace(ACCEL * dt);
+        vel.addInPlace(moveContribution);
+      } else {
+        const sp = vel.length();
+        if (sp > 0) {
+          const dec = Math.max(sp - DEACCEL * dt, 0);
+          vel.normalize().scaleInPlace(dec);
+        }
       }
+      if (vel.length() > MAX_SPEED) vel.normalize().scaleInPlace(MAX_SPEED);
     }
-    if (vel.length() > MAX_SPEED) vel.normalize().scaleInPlace(MAX_SPEED);
 
     vel.scaleToRef(dt, scaledVel);
+
+    /*
+    =======================
+    hotfix: stop velocity when object attack
+    =======================
+    */
+    if ((player as any).isAttacking?.()) {
+      vel.setAll(0)
+      // return;
+    }
+
     player.position.addInPlace(scaledVel);
 
     const spd = vel.length();
@@ -241,7 +299,10 @@ function setupRuntime({
       player.rotation.y += d * Math.min(1, dt * 8);
     }
 
-    if (serverSocketRef.current && accum > 0.1) {
+    if (serverSocketRef.current && accum > 0.1 &&
+      !(player as any).isAttacking?.()) {
+
+
       accum = 0;
 
       const cur = {

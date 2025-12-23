@@ -11,7 +11,9 @@ export const MAX_SPEED = 10;
 export const JOY_RADIUS = 70;
 export const JOY_DEADZONE = 6;
 
-export const MODEL_PEPE = "/models/pepe-test.glb";
+// export const MODEL_PEPE = "/models/pepe-test.glb";
+// export const MODEL_PEPE = "/models/model-pepe-v1.glb";
+export const MODEL_PEPE = "/models/model-pepe-v2.glb";
 
 export const AOI_CLIENT_CONFIG = {
   maxRenderDistance: 150,

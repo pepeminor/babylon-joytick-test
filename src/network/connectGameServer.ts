@@ -2,10 +2,10 @@ import type { Scene } from "@babylonjs/core";
 import { handlers } from "./handlers";
 import { OPCODES } from "../opcodes";
 
-const WS_URL = "wss://beast-describe-flag-affiliate.trycloudflare.com";
-// const WS_URL = "ws://localhost:7350";
+// const WS_URL = "wss://beast-describe-flag-affiliate.trycloudflare.com";
+const WS_URL = "ws://127.0.0.1:7350";
 
-// Hàm gửi update
+// send update
 export function sendUpdate(
     socket: WebSocket,
     myId: string,
@@ -25,7 +25,7 @@ export function sendUpdate(
 }
 
 
-// Kết nối game server
+// Connect game server
 export async function connectGameServer(scene: Scene) {
     let cleanupDone = false;
 
