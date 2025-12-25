@@ -216,10 +216,26 @@ async function setupRuntime({
   // listen resize & orientation
   window.addEventListener("resize", resize);
   window.addEventListener("orientationchange", resize);
+  window.addEventListener("focus", resize);
+
 
   // iOS cần resize trễ
   setTimeout(() => engine.resize(), 50);
   setTimeout(() => engine.resize(), 300);
+
+  const handleVisibility = () => {
+    if (document.visibilityState === "visible") {
+      // ép Babylon render lại
+      engine.resize();
+
+      // render 1 frame để wake up GPU
+      try {
+        scene.render();
+      } catch { }
+    }
+  };
+
+  document.addEventListener("visibilitychange", handleVisibility);
 
   try {
     scene.render();
@@ -473,7 +489,9 @@ async function setupRuntime({
 
   return () => {
     window.removeEventListener("resize", resize);
+    window.removeEventListener("focus", resize);
     window.removeEventListener("orientationchange", resize);
+    document.removeEventListener("visibilitychange", handleVisibility);
 
     disconnectServer(1000, "scene disposed");
     setSceneState((prev) => (prev === scene ? null : prev));
