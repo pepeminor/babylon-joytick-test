@@ -215,6 +215,15 @@ async function setupRuntime({
 
   let accum = 0;
 
+  const camFollow = new Vector3(
+    player.position.x,
+    player.position.y,
+    player.position.z
+  );
+
+  let lastCamTarget = new Vector3();
+
+
   const loop = () => {
     const dt = Math.min(0.05, engine.getDeltaTime() / 1000);
 
@@ -224,17 +233,35 @@ async function setupRuntime({
     camState.pitch += (camState.desiredPitch - camState.pitch) * k;
 
     // camState.target.copyFrom(player.position).addInPlace(targetOffset);
-    const DEADZONE_X = 0.03;
+    // const DEADZONE_X = 0.03;
 
-    const px = player.position.x;
-    const tx = camState.target.x;
+    // const px = player.position.x;
+    // const tx = camState.target.x;
 
-    if (Math.abs(px - tx) > DEADZONE_X) {
-      camState.target.x += (px - tx) * 0.15;
-    }
+    // if (Math.abs(px - tx) > DEADZONE_X) {
+    //   camState.target.x += (px - tx) * 0.15;
+    // }
 
-    camState.target.y = player.position.y + targetOffset.y;
-    camState.target.z = player.position.z + targetOffset.z;
+    // camState.target.y = player.position.y + targetOffset.y;
+    // camState.target.z = player.position.z + targetOffset.z;
+
+    // ===============================
+    // SMOOTH CAMERA FOLLOW TARGET (MOBILE SAFE)
+    // ===============================
+    const FOLLOW_LERP_X = 4;
+    const FOLLOW_LERP_Z = 10;
+
+    camFollow.x += (player.position.x - camFollow.x) * dt * FOLLOW_LERP_X;
+    camFollow.z += (player.position.z - camFollow.z) * dt * FOLLOW_LERP_Z;
+    camFollow.y = player.position.y;
+
+    // camera target dùng camFollow, KHÔNG dùng player.position
+    camState.target.set(
+      camFollow.x,
+      camFollow.y + targetOffset.y,
+      camFollow.z
+    );
+
 
     off.set(
       Math.sin(camState.yaw) * Math.cos(camState.pitch),
@@ -302,6 +329,11 @@ async function setupRuntime({
 
     player.position.addInPlace(scaledVel);
 
+    // kill sub-pixel jitter (mobile)
+    player.position.x = Math.round(player.position.x * 1000) / 1000;
+    player.position.z = Math.round(player.position.z * 1000) / 1000;
+
+
     const spd = vel.length();
     setLocomotion(spd);
 
@@ -343,9 +375,21 @@ async function setupRuntime({
       }
     }
 
-    Vector3.LerpToRef(camState.curPos, desired, 1 - Math.exp(-dt * 10), camState.curPos);
+    Vector3.LerpToRef(camState.curPos, desired, 1 - Math.exp(-dt * 6), camState.curPos);
+
+    // 🔥 snap camera target (kill micro jitter on mobile)
+    camState.target.x = Math.round(camState.target.x * 1000) / 1000;
+    camState.target.z = Math.round(camState.target.z * 1000) / 1000;
+
+    // camera.position.copyFrom(camState.curPos);
+    // camera.setTarget(camState.target);
+
     camera.position.copyFrom(camState.curPos);
-    camera.setTarget(camState.target);
+
+    if (Vector3.DistanceSquared(lastCamTarget, camState.target) > 0.00001) {
+      camera.setTarget(camState.target);
+      lastCamTarget.copyFrom(camState.target);
+    }
 
     if (debugOnRef.current) {
       const now = performance.now();
@@ -366,6 +410,28 @@ async function setupRuntime({
 
     scene.render();
   };
+
+  // ===============================
+  // INIT CAMERA TARGET & POSITION (CRITICAL)
+  // ===============================
+  camState.target.set(
+    camFollow.x,
+    camFollow.y + targetOffset.y,
+    camFollow.z
+  );
+
+  off.set(
+    Math.sin(camState.yaw) * Math.cos(camState.pitch),
+    Math.sin(camState.pitch),
+    Math.cos(camState.yaw) * Math.cos(camState.pitch),
+  );
+  off.scaleInPlace(-camState.distance);
+
+  // đặt camera position đúng ngay frame đầu
+  camState.curPos.copyFrom(camState.target).addInPlace(off);
+  camera.position.copyFrom(camState.curPos);
+  camera.setTarget(camState.target);
+
 
   engine.runRenderLoop(loop);
 
