@@ -5,6 +5,7 @@ export function useForceLandscape() {
 
     useEffect(() => {
         const check = () => {
+            // ❗ chỉ áp dụng cho mobile
             const isMobile =
                 /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
@@ -13,11 +14,19 @@ export function useForceLandscape() {
                 return;
             }
 
+            // ❗ tránh lúc Safari chưa init xong
+            if (window.innerWidth === 0 || window.innerHeight === 0) {
+                setBlocked(false);
+                return;
+            }
+
             const isPortrait = window.innerHeight > window.innerWidth;
             setBlocked(isPortrait);
         };
 
-        check();
+        // check trễ 1 frame cho Safari
+        requestAnimationFrame(check);
+
         window.addEventListener("resize", check);
         window.addEventListener("orientationchange", check);
 

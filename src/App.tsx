@@ -34,6 +34,12 @@ export default function App() {
   useEffect(() => { debugOnRef.current = debugOn; }, [debugOn]);
   useEffect(() => { lockDragRef.current = lockDrag; }, [lockDrag]);
 
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as any).standalone === true;
+
+  console.log("PWA standalone:", isStandalone);
+
   // input
   const keys = useKeys();
   const { JOY_RADIUS, joyActive, joyKnob, joyVec, onJoyStart, onJoyMove, onJoyEnd } = useJoystick();
