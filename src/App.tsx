@@ -12,8 +12,17 @@ import { sendUpdate } from "./network/connectGameServer";
 import { useGameServer } from "./hooks/useGameServer";
 import { ACCEL, DEACCEL, LOOK_LERP, MAX_SPEED } from "./config";
 import { useCombatStore } from "./store/combatStore";
+import { useForceLandscape } from "./hooks/useForceLandscape";
+import { RotateToLandscape } from "./components/RotateToLandscape";
 
 export default function App() {
+  const forceLandscape = useForceLandscape();
+
+  // ⛔ MOBILE + PORTRAIT → KHÔNG LOAD GAME
+  if (forceLandscape) {
+    return <RotateToLandscape />;
+  }
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
 
@@ -106,9 +115,15 @@ export default function App() {
   return (
     <div
       style={{
-        position: "fixed", inset: 0, overflow: "hidden",
-        background: "#000", color: "#fff",
-        userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none", touchAction: "none",
+        position: "fixed",
+        inset: 0,
+        overflow: "hidden",
+        background: "#000",
+        color: "#fff",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        WebkitTouchCallout: "none",
+        // touchAction: "none",
       }}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -196,8 +211,15 @@ async function setupRuntime({
     camera,
     camState,
     ignorePredicate: (t) => (t as HTMLElement | null)?.closest?.("#joystick") != null,
-    shouldAcceptPointer: (ev) => !lockDragRef.current || ev.clientY < window.innerHeight * 0.6,
+    shouldAcceptPointer: (ev) => {
+      if (lockDragRef.current) {
+        if (typeof ev.clientY !== "number") return true;
+        return ev.clientY < window.innerHeight * 0.6;
+      }
+      return true;
+    },
   });
+
 
   const up = new Vector3(0, 1, 0);
   const vel = new Vector3(0, 0, 0);
@@ -213,225 +235,169 @@ async function setupRuntime({
   const onResize = () => engine.resize();
   window.addEventListener("resize", onResize);
 
-  let accum = 0;
+  camState.target.copyFrom(player.position).addInPlace(targetOffset);
 
-  const camFollow = new Vector3(
-    player.position.x,
-    player.position.y,
-    player.position.z
-  );
+  const initOff = new Vector3(
+    Math.sin(camState.yaw) * Math.cos(camState.pitch),
+    Math.sin(camState.pitch),
+    Math.cos(camState.yaw) * Math.cos(camState.pitch)
+  ).scale(camState.distance);
 
-  let lastCamTarget = new Vector3();
+  camState.curPos.copyFrom(camState.target).addInPlace(initOff);
+  camera.position.copyFrom(camState.curPos);
+  camera.setTarget(camState.target);
+
+  const CAM_CONFIG = {
+    allowFlip: true,              // true = xoay 360
+    minPitch: -Math.PI / 2 + 0.05, // gần nhìn thẳng xuống
+    maxPitch: Math.PI / 2 - 0.05, // gần nhìn thẳng lên
+  };
+
+  let netAccum = 0;
 
 
   const loop = () => {
     const dt = Math.min(0.05, engine.getDeltaTime() / 1000);
 
-    accum += dt;
+    // ===== APPLY LOOK CONTROLLER =====
     const k = 1 - Math.exp(-LOOK_LERP * dt);
     camState.yaw += (camState.desiredYaw - camState.yaw) * k;
     camState.pitch += (camState.desiredPitch - camState.pitch) * k;
 
-    // camState.target.copyFrom(player.position).addInPlace(targetOffset);
-    // const DEADZONE_X = 0.03;
+    // clamp pitch
+    // camState.pitch = Math.max(-1.2, Math.min(-0.35, camState.pitch));
+    if (CAM_CONFIG.allowFlip) {
+      camState.pitch = Math.max(
+        CAM_CONFIG.minPitch,
+        Math.min(CAM_CONFIG.maxPitch, camState.pitch)
+      );
+    } else {
+      // kiểu Souls / God of War
+      camState.pitch = Math.max(-1.2, Math.min(-0.35, camState.pitch));
+    }
 
-    // const px = player.position.x;
-    // const tx = camState.target.x;
+    // ===== CAMERA TARGET =====
+    camState.target.copyFrom(player.position).addInPlace(targetOffset);
 
-    // if (Math.abs(px - tx) > DEADZONE_X) {
-    //   camState.target.x += (px - tx) * 0.15;
-    // }
-
-    // camState.target.y = player.position.y + targetOffset.y;
-    // camState.target.z = player.position.z + targetOffset.z;
-
-    // ===============================
-    // SMOOTH CAMERA FOLLOW TARGET (MOBILE SAFE)
-    // ===============================
-    const FOLLOW_LERP_X = 4;
-    const FOLLOW_LERP_Z = 10;
-
-    camFollow.x += (player.position.x - camFollow.x) * dt * FOLLOW_LERP_X;
-    camFollow.z += (player.position.z - camFollow.z) * dt * FOLLOW_LERP_Z;
-    camFollow.y = player.position.y;
-
-    // camera target dùng camFollow, KHÔNG dùng player.position
-    camState.target.set(
-      camFollow.x,
-      camFollow.y + targetOffset.y,
-      camFollow.z
-    );
-
+    // ===== CAMERA BACK OFFSET (THIRD PERSON) =====
+    const radius = camState.distance;
 
     off.set(
       Math.sin(camState.yaw) * Math.cos(camState.pitch),
       Math.sin(camState.pitch),
-      Math.cos(camState.yaw) * Math.cos(camState.pitch),
-    );
-    off.scaleInPlace(-camState.distance);
-    desired.copyFrom(camState.target).addInPlace(off);
+      Math.cos(camState.yaw) * Math.cos(camState.pitch)
+    ).scaleInPlace(radius);
 
-    camForward.set(-off.x, 0, -off.z).normalize();
+    // 🔥 QUAN TRỌNG: CAMERA Ở PHÍA SAU → TRỪ OFFSET
+    desired.copyFrom(camState.target).subtractInPlace(off);
+
+    // smooth follow
+    Vector3.LerpToRef(
+      camState.curPos,
+      desired,
+      1 - Math.exp(-dt * 8),
+      camState.curPos
+    );
+
+    camera.position.copyFrom(camState.curPos);
+    camera.setTarget(camState.target);
+
+    camForward.copyFrom(camState.target)
+      .subtractInPlace(camera.position);
+    camForward.y = 0;
+    camForward.normalize();
+
     Vector3.CrossToRef(up, camForward, camRight);
     camRight.normalize();
 
     let iX = joyVecRef.current.x;
     let iY = joyVecRef.current.y;
+
     if (Math.abs(iX) < 0.05) iX = 0;
     if (Math.abs(iY) < 0.05) iY = 0;
+
     if (keysRef.current["w"]) iY += 1;
     if (keysRef.current["s"]) iY -= 1;
     if (keysRef.current["a"]) iX -= 1;
     if (keysRef.current["d"]) iX += 1;
+
     const mag = Math.hypot(iX, iY);
     if (mag > 1) {
       iX /= mag;
       iY /= mag;
     }
 
-    if ((player as any).isAttacking?.()) {
-      // ❌ không cho di chuyển
-      // console.log("attacking");
-      // vel.set(0, 0, 0);
-      // setLocomotion(0);
-      vel.scaleInPlace(0.95);
-
-    } else {
+    if (!(player as any).isAttacking?.()) {
       moveDir.copyFrom(camForward).scaleInPlace(iY);
       camRight.scaleToRef(iX, moveContribution);
       moveDir.addInPlace(moveContribution);
 
       if (moveDir.lengthSquared() > 0) {
         moveDir.normalize();
-        moveContribution.copyFrom(moveDir).scaleInPlace(ACCEL * dt);
-        vel.addInPlace(moveContribution);
+        vel.addInPlace(moveDir.scale(ACCEL * dt));
       } else {
-        const sp = vel.length();
-        if (sp > 0) {
-          const dec = Math.max(sp - DEACCEL * dt, 0);
-          vel.normalize().scaleInPlace(dec);
-        }
+        vel.scaleInPlace(Math.max(0, 1 - DEACCEL * dt));
       }
-      if (vel.length() > MAX_SPEED) vel.normalize().scaleInPlace(MAX_SPEED);
+
+      if (vel.length() > MAX_SPEED) {
+        vel.normalize().scaleInPlace(MAX_SPEED);
+      }
+    } else {
+      vel.setAll(0);
     }
 
     vel.scaleToRef(dt, scaledVel);
-
-    /*
-    =======================
-    hotfix: stop velocity when object attack
-    =======================
-    */
-    if ((player as any).isAttacking?.()) {
-      vel.setAll(0)
-      // return;
-    }
-
     player.position.addInPlace(scaledVel);
 
-    // kill sub-pixel jitter (mobile)
-    player.position.x = Math.round(player.position.x * 1000) / 1000;
-    player.position.z = Math.round(player.position.z * 1000) / 1000;
+    netAccum += dt;
 
-
-    const spd = vel.length();
-    setLocomotion(spd);
-
-    if (spd > 0.1) {
-      const targetYaw = Math.atan2(vel.x, vel.z);
-      const curYaw = player.rotation.y;
-      let d = targetYaw - curYaw;
-      d = Math.atan2(Math.sin(d), Math.cos(d));
-      player.rotation.y += d * Math.min(1, dt * 8);
-    }
-
-    if (serverSocketRef.current && accum > 0.1 &&
-      !(player as any).isAttacking?.()) {
-
-
-      accum = 0;
+    if (
+      serverSocketRef.current &&
+      serverSocketRef.current.readyState === WebSocket.OPEN &&
+      netAccum > 0.1 && // 10 lần / giây
+      !(player as any).isAttacking?.()
+    ) {
+      netAccum = 0;
 
       const cur = {
         x: player.position.x,
         y: 0,
         z: player.position.z,
         yaw: player.rotation.y,
-        state: spd > 0.1 ? "run" : "idle",
+        state: vel.length() > 0.1 ? "run" : "idle",
       };
 
       const last = lastSentRef.current;
+
       const moved =
-        Math.hypot(cur.x - last.x, cur.y - last.y, cur.z - last.z) > 0.01 ||
+        Math.hypot(cur.x - last.x, cur.z - last.z) > 0.01 ||
         Math.abs(cur.yaw - last.yaw) > 0.02 ||
         cur.state !== last.state;
 
       if (moved) {
+        console.log(moved)
         sendUpdate(serverSocketRef.current, player.id, {
           pos: [cur.x, 0, cur.z],
           yaw: cur.yaw,
           action: cur.state,
         });
+
         lastSentRef.current = cur;
       }
     }
 
-    Vector3.LerpToRef(camState.curPos, desired, 1 - Math.exp(-dt * 6), camState.curPos);
+    const spd = vel.length();
+    setLocomotion(spd);
 
-    // 🔥 snap camera target (kill micro jitter on mobile)
-    camState.target.x = Math.round(camState.target.x * 1000) / 1000;
-    camState.target.z = Math.round(camState.target.z * 1000) / 1000;
-
-    // camera.position.copyFrom(camState.curPos);
-    // camera.setTarget(camState.target);
-
-    camera.position.copyFrom(camState.curPos);
-
-    if (Vector3.DistanceSquared(lastCamTarget, camState.target) > 0.00001) {
-      camera.setTarget(camState.target);
-      lastCamTarget.copyFrom(camState.target);
-    }
-
-    if (debugOnRef.current) {
-      const now = performance.now();
-      if (now - lastDebugPushRef.current > 120) {
-        lastDebugPushRef.current = now;
-        setDebug({
-          fps: engine.getFps(),
-          dt,
-          speed: vel.length(),
-          yaw: camState.yaw,
-          pitch: camState.pitch,
-          px: player.position.x,
-          py: player.position.y,
-          pz: player.position.z,
-        });
-      }
+    if (spd > 0.05) {
+      const targetYaw = Math.atan2(vel.x, vel.z);
+      let d = targetYaw - player.rotation.y;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      player.rotation.y += d * Math.min(1, dt * 8);
     }
 
     scene.render();
   };
-
-  // ===============================
-  // INIT CAMERA TARGET & POSITION (CRITICAL)
-  // ===============================
-  camState.target.set(
-    camFollow.x,
-    camFollow.y + targetOffset.y,
-    camFollow.z
-  );
-
-  off.set(
-    Math.sin(camState.yaw) * Math.cos(camState.pitch),
-    Math.sin(camState.pitch),
-    Math.cos(camState.yaw) * Math.cos(camState.pitch),
-  );
-  off.scaleInPlace(-camState.distance);
-
-  // đặt camera position đúng ngay frame đầu
-  camState.curPos.copyFrom(camState.target).addInPlace(off);
-  camera.position.copyFrom(camState.curPos);
-  camera.setTarget(camState.target);
-
 
   engine.runRenderLoop(loop);
 
