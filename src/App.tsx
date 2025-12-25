@@ -223,7 +223,19 @@ async function setupRuntime({
     camState.yaw += (camState.desiredYaw - camState.yaw) * k;
     camState.pitch += (camState.desiredPitch - camState.pitch) * k;
 
-    camState.target.copyFrom(player.position).addInPlace(targetOffset);
+    // camState.target.copyFrom(player.position).addInPlace(targetOffset);
+    const DEADZONE_X = 0.03;
+
+    const px = player.position.x;
+    const tx = camState.target.x;
+
+    if (Math.abs(px - tx) > DEADZONE_X) {
+      camState.target.x += (px - tx) * 0.15;
+    }
+
+    camState.target.y = player.position.y + targetOffset.y;
+    camState.target.z = player.position.z + targetOffset.z;
+
     off.set(
       Math.sin(camState.yaw) * Math.cos(camState.pitch),
       Math.sin(camState.pitch),
@@ -238,6 +250,8 @@ async function setupRuntime({
 
     let iX = joyVecRef.current.x;
     let iY = joyVecRef.current.y;
+    if (Math.abs(iX) < 0.05) iX = 0;
+    if (Math.abs(iY) < 0.05) iY = 0;
     if (keysRef.current["w"]) iY += 1;
     if (keysRef.current["s"]) iY -= 1;
     if (keysRef.current["a"]) iX -= 1;
