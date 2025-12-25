@@ -129,13 +129,26 @@ export default function App() {
         userSelect: "none",
         WebkitUserSelect: "none",
         WebkitTouchCallout: "none",
+        paddingTop: "var(--sat)",
+        paddingBottom: "var(--sab)",
+        paddingLeft: "var(--sal)",
+        paddingRight: "var(--sar)",
         // touchAction: "none",
       }}
       onContextMenu={(e) => e.preventDefault()}
     >
       <canvas
         ref={canvasRef}
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }}
+        // style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          display: "block",
+          touchAction: "none",
+        }}
       />
 
       <DebugOverlay
@@ -195,6 +208,19 @@ async function setupRuntime({
 
   const { engine, scene, camera, player, setLocomotion } = await createScene(canvas);
   engine.resize();
+
+  const resize = () => {
+    engine.resize();
+  };
+
+  // listen resize & orientation
+  window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", resize);
+
+  // iOS cần resize trễ
+  setTimeout(() => engine.resize(), 50);
+  setTimeout(() => engine.resize(), 300);
+
   try {
     scene.render();
   } catch {
@@ -238,8 +264,8 @@ async function setupRuntime({
   const camRight = new Vector3(0, 0, 0);
   const scaledVel = new Vector3(0, 0, 0);
 
-  const onResize = () => engine.resize();
-  window.addEventListener("resize", onResize);
+  // const onResize = () => engine.resize();
+  // window.addEventListener("resize", onResize);
 
   camState.target.copyFrom(player.position).addInPlace(targetOffset);
 
@@ -413,14 +439,17 @@ async function setupRuntime({
   engine.onContextRestoredObservable.add(onRestored);
 
   return () => {
+    window.removeEventListener("resize", resize);
+    window.removeEventListener("orientationchange", resize);
+
     disconnectServer(1000, "scene disposed");
-    setSceneState((prev: Scene | null) => (prev === scene ? null : prev));
+    setSceneState((prev) => (prev === scene ? null : prev));
+
     engine.onContextLostObservable.removeCallback(onLost);
     engine.onContextRestoredObservable.removeCallback(onRestored);
-    window.removeEventListener("resize", onResize);
+
     cleanupLook();
     engine.stopRenderLoop();
-    (scene as any).__cleanupResize?.();
     engine.dispose();
   };
 }

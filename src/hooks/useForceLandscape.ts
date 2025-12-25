@@ -1,31 +1,16 @@
 import { useEffect, useState } from "react";
 
 export function useForceLandscape() {
-    const [blocked, setBlocked] = useState(false);
+    const [force, setForce] = useState(false);
 
     useEffect(() => {
         const check = () => {
-            // ❗ chỉ áp dụng cho mobile
-            const isMobile =
-                /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-            if (!isMobile) {
-                setBlocked(false);
-                return;
-            }
-
-            // ❗ tránh lúc Safari chưa init xong
-            if (window.innerWidth === 0 || window.innerHeight === 0) {
-                setBlocked(false);
-                return;
-            }
-
+            const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
             const isPortrait = window.innerHeight > window.innerWidth;
-            setBlocked(isPortrait);
+            setForce(isMobile && isPortrait);
         };
 
-        // check trễ 1 frame cho Safari
-        requestAnimationFrame(check);
+        check();
 
         window.addEventListener("resize", check);
         window.addEventListener("orientationchange", check);
@@ -36,5 +21,5 @@ export function useForceLandscape() {
         };
     }, []);
 
-    return blocked;
+    return force;
 }
