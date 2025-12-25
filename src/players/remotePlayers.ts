@@ -274,12 +274,14 @@ export function updateRemotePlayers(scene: Scene, myPos: Vector3) {
 
 
     if (!r.isAttacking) {
+      r.targets.attack = 0;
+
       if (r.state === "run") {
         r.targets.run = 1;
         r.targets.idle = 0;
       } else {
-        r.targets.idle = 1;
         r.targets.run = 0;
+        r.targets.idle = 1;
       }
     }
 
@@ -317,14 +319,16 @@ export function updateRemotePlayers(scene: Scene, myPos: Vector3) {
         r.isAttacking = false;
         r.attackLockPos = undefined;
 
-        // const dist = Vector3.Distance(r.root.position, r.target);
-        // if (dist > 0.01) {
-        //   r.targets.run = 1;
-        //   r.targets.idle = 0;
-        // } else {
-        //   r.targets.run = 0;
-        //   r.targets.idle = 1;
-        // }
+        // 🔥 KHÔI PHỤC STATE TỪ SERVER
+        r.targets.attack = 0;
+
+        if (r.state === "run") {
+          r.targets.run = 1;
+          r.targets.idle = 0;
+        } else {
+          r.targets.run = 0;
+          r.targets.idle = 1;
+        }
       }
     }
 
