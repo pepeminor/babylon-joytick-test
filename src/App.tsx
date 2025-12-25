@@ -206,34 +206,57 @@ async function setupRuntime({
   canvas.style.setProperty("-webkit-touch-callout", "none");
 
   const { engine, scene, camera, player, setLocomotion } = await createScene(canvas);
-  engine.resize();
+  // engine.resize();
 
-  const resize = () => {
+  // const resize = () => {
+  //   engine.resize();
+  // };
+
+  // // listen resize & orientation
+  // window.addEventListener("resize", resize);
+  // window.addEventListener("orientationchange", resize);
+
+  // // iOS cần resize trễ
+  // setTimeout(() => engine.resize(), 50);
+  // setTimeout(() => engine.resize(), 300);
+
+  // const handleVisibility = () => {
+  //   if (document.visibilityState === "visible") {
+  //     // wake up GPU + fix Chrome/iOS
+  //     resize();
+  //     setTimeout(resize, 50);
+  //     setTimeout(resize, 300);
+
+  //     try {
+  //       scene.render();
+  //     } catch { }
+  //   }
+  // };
+
+  // document.addEventListener("visibilitychange", handleVisibility);
+
+  const resizeSafe = () => {
     engine.resize();
   };
 
-  // listen resize & orientation
-  window.addEventListener("resize", resize);
-  window.addEventListener("orientationchange", resize);
+  // orientation / resize
+  window.addEventListener("resize", resizeSafe);
+  window.addEventListener("orientationchange", resizeSafe);
 
-  // iOS cần resize trễ
-  setTimeout(() => engine.resize(), 50);
-  setTimeout(() => engine.resize(), 300);
-
+  // tab background → foreground
   const handleVisibility = () => {
-    if (document.visibilityState === "visible") {
-      // wake up GPU + fix Chrome/iOS
-      resize();
-      setTimeout(resize, 50);
-      setTimeout(resize, 300);
-
-      try {
-        scene.render();
-      } catch { }
+    if (!document.hidden) {
+      resizeSafe();
+      requestAnimationFrame(resizeSafe);
+      setTimeout(resizeSafe, 200);
     }
   };
 
   document.addEventListener("visibilitychange", handleVisibility);
+
+  // init kick
+  resizeSafe();
+  setTimeout(resizeSafe, 200);
 
   try {
     scene.render();
@@ -486,8 +509,8 @@ async function setupRuntime({
   engine.onContextRestoredObservable.add(onRestored);
 
   return () => {
-    window.removeEventListener("resize", resize);
-    window.removeEventListener("orientationchange", resize);
+    window.removeEventListener("resize", resizeSafe);
+    window.removeEventListener("orientationchange", resizeSafe);
     document.removeEventListener("visibilitychange", handleVisibility);
 
     disconnectServer(1000, "scene disposed");
