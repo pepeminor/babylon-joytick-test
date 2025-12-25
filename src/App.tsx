@@ -172,16 +172,16 @@ type RuntimeParams = {
 
 async function setupRuntime({
   canvas,
-  debugOnRef,
+  // debugOnRef,
   lockDragRef,
   keysRef,
   joyVecRef,
-  lastDebugPushRef,
+  // lastDebugPushRef,
   lastSentRef,
   serverSocketRef,
   disconnectServer,
   setSceneState,
-  setDebug,
+  // setDebug,
 }: RuntimeParams) {
   canvas.style.touchAction = "none";
   canvas.style.userSelect = "none";
