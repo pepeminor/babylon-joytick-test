@@ -12,16 +12,16 @@ import { sendUpdate } from "./network/connectGameServer";
 import { useGameServer } from "./hooks/useGameServer";
 import { ACCEL, DEACCEL, LOOK_LERP, MAX_SPEED } from "./config";
 import { useCombatStore } from "./store/combatStore";
-import { useForceLandscape } from "./hooks/useForceLandscape";
-import { RotateToLandscape } from "./components/RotateToLandscape";
+// import { useForceLandscape } from "./hooks/useForceLandscape";
+// import { RotateToLandscape } from "./components/RotateToLandscape";
 
 export default function App() {
-  const forceLandscape = useForceLandscape();
+  // const forceLandscape = useForceLandscape();
 
-  // ⛔ MOBILE + PORTRAIT → KHÔNG LOAD GAME
-  if (forceLandscape) {
-    return <RotateToLandscape />;
-  }
+  // // ⛔ MOBILE + PORTRAIT → KHÔNG LOAD GAME
+  // if (forceLandscape) {
+  //   return <RotateToLandscape />;
+  // }
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
@@ -142,8 +142,7 @@ export default function App() {
         // style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }}
         style={{
           position: "absolute",
-          top: 0,
-          left: 0,
+          inset: 0,
           width: "100%",
           height: "100%",
           display: "block",
@@ -216,8 +215,6 @@ async function setupRuntime({
   // listen resize & orientation
   window.addEventListener("resize", resize);
   window.addEventListener("orientationchange", resize);
-  window.addEventListener("focus", resize);
-
 
   // iOS cần resize trễ
   setTimeout(() => engine.resize(), 50);
@@ -225,10 +222,11 @@ async function setupRuntime({
 
   const handleVisibility = () => {
     if (document.visibilityState === "visible") {
-      // ép Babylon render lại
-      engine.resize();
+      // wake up GPU + fix Chrome/iOS
+      resize();
+      setTimeout(resize, 50);
+      setTimeout(resize, 300);
 
-      // render 1 frame để wake up GPU
       try {
         scene.render();
       } catch { }
@@ -489,7 +487,6 @@ async function setupRuntime({
 
   return () => {
     window.removeEventListener("resize", resize);
-    window.removeEventListener("focus", resize);
     window.removeEventListener("orientationchange", resize);
     document.removeEventListener("visibilitychange", handleVisibility);
 
