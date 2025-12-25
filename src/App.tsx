@@ -12,17 +12,8 @@ import { sendUpdate } from "./network/connectGameServer";
 import { useGameServer } from "./hooks/useGameServer";
 import { ACCEL, DEACCEL, LOOK_LERP, MAX_SPEED } from "./config";
 import { useCombatStore } from "./store/combatStore";
-// import { useForceLandscape } from "./hooks/useForceLandscape";
-// import { RotateToLandscape } from "./components/RotateToLandscape";
 
 export default function App() {
-  // const forceLandscape = useForceLandscape();
-
-  // // ⛔ MOBILE + PORTRAIT → KHÔNG LOAD GAME
-  // if (forceLandscape) {
-  //   return <RotateToLandscape />;
-  // }
-
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
 
