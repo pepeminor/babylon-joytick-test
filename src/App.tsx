@@ -267,7 +267,15 @@ async function setupRuntime({
   // const onResize = () => engine.resize();
   // window.addEventListener("resize", onResize);
 
-  camState.target.copyFrom(player.position).addInPlace(targetOffset);
+  const camFollow = player.position.clone();
+
+  const CAM_FOLLOW_CONFIG = {
+    deadZone: 0.05,      // khoảng player được đi trước camera
+    followSpeed: 8,     // tốc độ camera đuổi theo
+  };
+
+  // camState.target.copyFrom(player.position).addInPlace(targetOffset);
+
 
   const initOff = new Vector3(
     Math.sin(camState.yaw) * Math.cos(camState.pitch),
@@ -309,7 +317,32 @@ async function setupRuntime({
     }
 
     // ===== CAMERA TARGET =====
-    camState.target.copyFrom(player.position).addInPlace(targetOffset);
+    // camState.target.copyFrom(player.position).addInPlace(targetOffset);
+
+    // ===== DEAD ZONE CAMERA FOLLOW =====
+    const dx = player.position.x - camFollow.x;
+    const dz = player.position.z - camFollow.z;
+
+    const dist = Math.hypot(dx, dz);
+
+    if (dist > CAM_FOLLOW_CONFIG.deadZone) {
+      const excess = dist - CAM_FOLLOW_CONFIG.deadZone;
+
+      camFollow.x += (dx / dist) * excess * CAM_FOLLOW_CONFIG.followSpeed * dt;
+      camFollow.z += (dz / dist) * excess * CAM_FOLLOW_CONFIG.followSpeed * dt;
+    }
+
+    // kill micro jitter (mobile)
+    camFollow.x = Math.round(camFollow.x * 1000) / 1000;
+    camFollow.z = Math.round(camFollow.z * 1000) / 1000;
+
+    // camera target dùng camFollow
+    camState.target.set(
+      camFollow.x,
+      player.position.y + targetOffset.y,
+      camFollow.z
+    );
+
 
     // ===== CAMERA BACK OFFSET (THIRD PERSON) =====
     const radius = camState.distance;
