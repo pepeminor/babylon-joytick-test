@@ -21,8 +21,8 @@
 ## Getting Started
 
 ```bash
-yarn install
-yarn dev
+npm install
+npm run dev
 ```
 
 Open the URL printed by Vite, typically `http://localhost:5173`.
@@ -30,19 +30,19 @@ Open the URL printed by Vite, typically `http://localhost:5173`.
 ### Build
 
 ```bash
-yarn build
+npm run build
 ```
 
 ### Lint
 
 ```bash
-yarn lint
+npm run lint
 ```
 
 ### Preview production build
 
 ```bash
-yarn preview
+npm run preview
 ```
 
 ## Runtime Flow

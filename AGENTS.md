@@ -10,6 +10,7 @@ Goals when working in this repo:
 - understand architecture before making changes
 - optimize for realtime game client behavior, especially Babylon.js render loops, asset loading, and network sync
 - avoid broad changes unless they are necessary
+- prefer npm commands and the `package-lock.json` toolchain for this repo
 
 ## Working Principles
 
