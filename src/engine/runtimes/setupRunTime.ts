@@ -4,6 +4,7 @@ import { createMovementController } from "./createMovementController";
 import { createNetworkSync } from "./createNetworkSync";
 import { createScene } from "../createScene";
 import type { Scene, Vector3 } from "@babylonjs/core";
+import type { ClientPreset } from "../../config/clientPreset";
 
 type RefHolder<T> = { current: T };
 
@@ -16,6 +17,7 @@ type RuntimeParams = {
     serverSocketRef: RefHolder<WebSocket | null>;
     disconnectServer: (code?: number, reason?: string) => void;
     setSceneState: (scene: Scene | null | ((prev: Scene | null) => Scene | null)) => void;
+    preset: ClientPreset;
 };
 
 export async function setupRuntime({
@@ -27,13 +29,16 @@ export async function setupRuntime({
     serverSocketRef,
     disconnectServer,
     setSceneState,
+    preset,
 }: RuntimeParams) {
     canvas.style.touchAction = "none";
     canvas.style.userSelect = "none";
     canvas.style.setProperty("-webkit-touch-callout", "none");
 
     const { engine, scene, camera, player, setLocomotion } =
-        await createScene(canvas);
+        await createScene(canvas, {
+            maxDevicePixelRatio: preset.maxDevicePixelRatio,
+        });
 
     // ===== VIEWPORT / RESIZE =====
     const viewport = createViewportManager(engine, scene);
@@ -46,6 +51,9 @@ export async function setupRuntime({
         camera,
         player,
         lockDragRef,
+        lookSens: preset.lookSens,
+        lookLerp: preset.lookLerp,
+        distance: preset.cameraDistance,
     });
 
     // ===== MOVEMENT =====

@@ -15,7 +15,10 @@ import {
   ShaderMaterial,
 } from "@babylonjs/core";
 
-export function setupScene(canvas: HTMLCanvasElement) {
+export function setupScene(
+  canvas: HTMLCanvasElement,
+  options?: { maxDevicePixelRatio?: number }
+) {
   // --- Engine ---
   const engine = new Engine(canvas, true, {
     antialias: true,
@@ -25,7 +28,7 @@ export function setupScene(canvas: HTMLCanvasElement) {
   });
 
   const resize = () => {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, options?.maxDevicePixelRatio ?? 2);
     engine.setHardwareScalingLevel(1 / dpr);
     engine.resize(true);
   };
@@ -72,7 +75,7 @@ export function setupScene(canvas: HTMLCanvasElement) {
   // --- Sky (background image) ---
   new Layer("sky", "/textures/retro-sky.jpg", scene, true);
 
-  // --- SUN với glow procedural shader ---
+  // --- Sun with a procedural glow shader ---
   const sun = MeshBuilder.CreateDisc(
     "sun",
     { radius: 110, tessellation: 64 },
@@ -101,14 +104,14 @@ export function setupScene(canvas: HTMLCanvasElement) {
       varying vec2 vUV;
 
       void main(void) {
-        // map vUV từ [0..1] sang [-1..1]
+        // Map vUV from [0..1] to [-1..1].
         vec2 p = vUV * 2.0 - 1.0;
         float r = length(p);
 
-        // Nếu ngoài vòng tròn -> bỏ pixel
+        // Discard pixels outside the circle.
         if (r > 1.0) discard;
 
-        // Gradient vàng -> cam -> hồng
+        // Yellow -> orange -> pink gradient.
         float y = vUV.y;
         vec3 top = vec3(1.0, 0.85, 0.25);
         vec3 mid = vec3(1.0, 0.55, 0.20);
@@ -116,7 +119,7 @@ export function setupScene(canvas: HTMLCanvasElement) {
         vec3 color = mix(bot, mid, smoothstep(0.0, 0.5, y));
         color = mix(color, top, smoothstep(0.5, 1.0, y));
 
-        // Sọc ngang
+        // Horizontal stripes.
         float bands = step(0.5, fract(y * 18.0));
         color *= (1.0 - 0.55 * bands);
 
@@ -130,7 +133,7 @@ export function setupScene(canvas: HTMLCanvasElement) {
     }
   );
 
-  // Tắt blend & depth
+  // Disable blending and depth writes.
   sunShader.alphaMode = Engine.ALPHA_DISABLE;
   sunShader.needAlphaBlending = () => false;
   sunShader.backFaceCulling = false;
@@ -138,7 +141,7 @@ export function setupScene(canvas: HTMLCanvasElement) {
 
   sun.material = sunShader;
 
-  // --- Fog tím xanh (nhẹ) ---
+  // --- Subtle blue-purple fog ---
   scene.fogMode = Scene.FOGMODE_EXP2;
   scene.fogDensity = 0.015;
   scene.fogColor = new Color3(0.1, 0.05, 0.2);

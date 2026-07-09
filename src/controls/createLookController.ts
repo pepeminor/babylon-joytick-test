@@ -11,15 +11,17 @@ type Options = {
     canvas: HTMLCanvasElement;
     camera: FreeCamera;
     camState: CamState;
-    // Bỏ qua nếu target nằm trong 1 vùng (vd: joystick)
+    lookSens?: number;
+    // Ignore if the target is inside a reserved region (for example, the joystick).
     ignorePredicate?: (t: EventTarget | null) => boolean;
-    // Chỉ nhận pointer nếu đạt điều kiện (vd: chỉ cho drag ở nửa trên màn)
+    // Only accept pointer events when the condition passes (for example, drag only on the top half of the screen).
     shouldAcceptPointer?: (ev: PointerEvent) => boolean;
 };
 
-// đăng ký listeners drag xoay camera (multi-touch safe). Trả cleanup.
+// Register drag listeners for camera rotation in a multi-touch-safe way. Returns cleanup.
 export function createLookController(opts: Options) {
     const { canvas, camState, ignorePredicate, shouldAcceptPointer } = opts;
+    const lookSens = opts.lookSens ?? LOOK_SENS;
 
     let camPointerId: number | null = null;
     let lastDrag: { x: number; y: number } | null = null;
@@ -44,8 +46,8 @@ export function createLookController(opts: Options) {
         const dy = e.clientY - lastDrag.y;
         lastDrag = { x: e.clientX, y: e.clientY };
 
-        camState.desiredYaw -= dx * LOOK_SENS;
-        camState.desiredPitch -= dy * LOOK_SENS;
+        camState.desiredYaw -= dx * lookSens;
+        camState.desiredPitch -= dy * lookSens;
         camState.desiredPitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, camState.desiredPitch));
     };
 

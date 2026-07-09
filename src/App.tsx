@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Scene } from "@babylonjs/core";
 import { useKeys } from "./hooks/useKeys";
 import { useScrollLock } from "./hooks/useScrollLock";
@@ -8,10 +8,12 @@ import { DebugOverlay, type DebugInfo } from "./components/DebugOverlay";
 import { useGameServer } from "./hooks/useGameServer";
 import { useCombatStore } from "./store/combatStore";
 import { setupRuntime } from "./engine/runtimes/setupRunTime";
+import { getClientPreset } from "./config/clientPreset";
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const preset = useMemo(() => getClientPreset(), []);
 
   // UI toggles
   const [debugOn, setDebugOn] = useState(false);
@@ -29,7 +31,10 @@ export default function App() {
 
   // input
   const keys = useKeys();
-  const { JOY_RADIUS, joyActive, joyKnob, joyVec, onJoyStart, onJoyMove, onJoyEnd } = useJoystick();
+  const { JOY_RADIUS, joyActive, joyKnob, joyVec, onJoyStart, onJoyMove, onJoyEnd } = useJoystick({
+    radius: preset.joystickRadius,
+    deadzone: preset.joystickDeadzone,
+  });
   useScrollLock(joyActive);
 
   // debug state
@@ -64,6 +69,7 @@ export default function App() {
         serverSocketRef,
         disconnectServer,
         setSceneState,
+        preset,
       });
 
       // If component still mounted → keep cleanup
@@ -78,7 +84,7 @@ export default function App() {
       mounted = false;
       cleanupRef.current?.();
     };
-  }, [disconnectServer, keys, joyVec, serverSocketRef, setDebug, setSceneState]);
+  }, [disconnectServer, keys, joyVec, preset, serverSocketRef, setDebug, setSceneState]);
 
   useEffect(() => {
     let lastTick = useCombatStore.getState().attackTick;

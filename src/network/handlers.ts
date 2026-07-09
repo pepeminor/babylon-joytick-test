@@ -6,6 +6,7 @@ import {
   despawnRemotePlayer,
   updateRemotePlayerFromServer,
   remotes,
+  queueRemoteAttack,
   triggerRemoteAttack,
 } from "../players/remotePlayers";
 import { sendUpdate } from "./connectGameServer";
@@ -24,6 +25,7 @@ export const handlers: Record<string, (args: HandlerArgs) => void> = {
         pos: msg.pos,
         yaw: msg.yaw,
         state: msg.state,
+        cosmeticId: msg.cosmeticId,
       });
     }
   },
@@ -46,6 +48,7 @@ export const handlers: Record<string, (args: HandlerArgs) => void> = {
           pos: info.pos,
           yaw: info.yaw,
           state: info.state,
+          cosmeticId: info.cosmeticId,
         });
 
       }
@@ -88,14 +91,19 @@ export const handlers: Record<string, (args: HandlerArgs) => void> = {
   },
 
   [OPCODES.ATTACK]: ({ msg }) => {
-    const r = remotes[msg.id];
-    if (!r) return;
-
-    triggerRemoteAttack(r, {
+    const attack = {
       pos: msg.pos,
       yaw: msg.yaw,
       duration: msg.duration,
-    });
+    };
+
+    const r = remotes[msg.id];
+    if (!r) {
+      queueRemoteAttack(msg.id, attack);
+      return;
+    }
+
+    triggerRemoteAttack(r, attack);
   },
 
   [OPCODES.LEAVE]: ({ msg }) => {

@@ -1,6 +1,5 @@
 import { Vector3 } from "@babylonjs/core";
 import { createLookController, type CamState } from "../../controls/createLookController";
-import { LOOK_LERP } from "../../config";
 
 type Ref<T> = { current: T };
 
@@ -9,16 +8,22 @@ export function createCameraController({
     camera,
     player,
     lockDragRef,
+    lookSens,
+    lookLerp,
+    distance,
 }: {
     canvas: HTMLCanvasElement;
     camera: any;
     player: any;
     lockDragRef: Ref<boolean>;
+    lookSens: number;
+    lookLerp: number;
+    distance: number;
 }) {
     const camState: CamState = {
         yaw: 0,
         pitch: -0.12,
-        distance: 5.5,
+        distance,
         target: new Vector3(),
         curPos: camera.position.clone(),
         desiredYaw: 0,
@@ -45,6 +50,7 @@ export function createCameraController({
         canvas,
         camera,
         camState,
+        lookSens,
         ignorePredicate: (t) => (t as HTMLElement | null)?.closest?.("#joystick") != null,
         shouldAcceptPointer: (ev) => {
             if (lockDragRef.current) {
@@ -56,7 +62,7 @@ export function createCameraController({
     });
 
     function update(dt: number) {
-        const k = 1 - Math.exp(-LOOK_LERP * dt);
+        const k = 1 - Math.exp(-lookLerp * dt);
         camState.yaw += (camState.desiredYaw - camState.yaw) * k;
         camState.pitch += (camState.desiredPitch - camState.pitch) * k;
 

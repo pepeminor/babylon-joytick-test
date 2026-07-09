@@ -3,6 +3,7 @@ import { setupScene } from "./sceneSetup";
 import { updateRemotePlayers } from "../players/remotePlayers";
 import { createGhostManager, type GhostManager } from "../players/GhostManager";
 import { MODEL_PEPE } from "../config";
+import { clearRemoteRigPool } from "../players/remotePlayerPool";
 
 let ghostManager: GhostManager | null = null;
 export function setLocalGhostManager(manager: GhostManager | null) {
@@ -13,8 +14,11 @@ export function getLocalGhostManager() {
   return ghostManager;
 }
 
-export async function createScene(canvas: HTMLCanvasElement) {
-  const { engine, scene, camera } = setupScene(canvas);
+export async function createScene(
+  canvas: HTMLCanvasElement,
+  options?: { maxDevicePixelRatio?: number }
+) {
+  const { engine, scene, camera } = setupScene(canvas, options);
 
 
 
@@ -32,7 +36,9 @@ export async function createScene(canvas: HTMLCanvasElement) {
   );
 
   scene.onDisposeObservable.add(() => {
+    (scene as any).__cleanupResize?.();
     setLocalGhostManager(null);
+    clearRemoteRigPool();
   });
 
   return { engine, scene, camera, player, setLocomotion, ghostManager: manager };

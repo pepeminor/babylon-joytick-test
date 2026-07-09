@@ -12,7 +12,12 @@ import {
     StandardMaterial
 } from "@babylonjs/core";
 
-export function createMagicStaff(scene: Scene): TransformNode {
+export type MagicStaffOptions = {
+    enableFx?: boolean;
+};
+
+export function createMagicStaff(scene: Scene, options?: MagicStaffOptions): TransformNode {
+    const enableFx = options?.enableFx ?? false;
     const root = new TransformNode("magicStaff", scene);
 
     // --------------------------------------------------------
@@ -47,65 +52,59 @@ export function createMagicStaff(scene: Scene): TransformNode {
     orb.parent = root;
 
     // --------------------------------------------------------
-    // 3) GLOW EFFECT (tăng độ sáng của orb)
+    // 3) GLOW EFFECT (increase the orb brightness)
     // --------------------------------------------------------
-    const glow = new GlowLayer("glow", scene, {
-        blurKernelSize: 16,
-    });
-    glow.intensity = 2;
+    let glow: GlowLayer | null = null;
+    if (enableFx) {
+        glow = new GlowLayer("glow", scene, {
+            blurKernelSize: 16,
+        });
+        glow.intensity = 2;
+    }
 
     // --------------------------------------------------------
     // 4) PARTICLES (magic dust like Elden Ring)
     // --------------------------------------------------------
-    const ps = new ParticleSystem("magicParticles", 200, scene);
+    let ps: ParticleSystem | null = null;
+    if (enableFx) {
+        ps = new ParticleSystem("magicParticles", 200, scene);
+        ps.particleTexture = new Texture("/textures/flare-mini.png", scene);
+        ps.emitter = orb;
 
-    ps.particleTexture = new Texture("/public/textures/flare-mini.png", scene);
-    ps.emitter = orb;
+        ps.minSize = 0.08;
+        ps.maxSize = 0.12;
 
-    ps.minSize = 0.08;
-    ps.maxSize = 0.12;
+        ps.minLifeTime = 0.4;
+        ps.maxLifeTime = 0.7;
 
-    ps.minLifeTime = 0.4;
-    ps.maxLifeTime = 0.7;
+        ps.emitRate = 160;
+        ps.updateSpeed = 0.02;
 
-    ps.emitRate = 160;
-    ps.updateSpeed = 0.02;
+        ps.minEmitPower = 0.05;
+        ps.maxEmitPower = 0.15;
 
-    ps.minEmitPower = 0.05;
-    ps.maxEmitPower = 0.15;
+        // Blue Elden Ring-style particles.
+        ps.color1 = new Color4(0.4, 0.8, 1.0, 1);
+        ps.color2 = new Color4(0.1, 0.3, 0.9, 0.8);
 
-    // ps.color1 = new Color4(1.0, 0.6, 0.2, 1);
-    // ps.color2 = new Color4(1.0, 0.3, 0.0, 22);
-
-    // blue elden ring
-    ps.color1 = new Color4(0.4, 0.8, 1.0, 1);
-    ps.color2 = new Color4(0.1, 0.3, 0.9, 0.8);
-
-    // orange burn
-    // ps.color1 = new Color4(1.0, 0.6, 0.2, 1);
-    // ps.color2 = new Color4(1.0, 0.3, 0.0, 1);
-
-    //purple
-    // ps.color1 = new Color4(0.7, 0.3, 1.0, 1);
-    // ps.color2 = new Color4(0.4, 0.1, 0.7, 0.8);
-
-    ps.direction1 = new Vector3(-1, 1, -1);
-    ps.direction2 = new Vector3(1, 1, 1);
-
-    ps.blendMode = ParticleSystem.BLENDMODE_ADD;
-
-    // ps.start();
+        ps.direction1 = new Vector3(-1, 1, -1);
+        ps.direction2 = new Vector3(1, 1, 1);
+        ps.blendMode = ParticleSystem.BLENDMODE_ADD;
+    }
 
     // --------------------------------------------------------
     // 5) ORB ANIMATION — pulsing effect
     // --------------------------------------------------------
-    scene.onBeforeRenderObservable.add(() => {
-        const t = performance.now() * 0.002;
-        const pulse = 0.4 + Math.sin(t) * 0.3;
+    let beforeRenderToken: any = null;
+    if (enableFx) {
+        beforeRenderToken = scene.onBeforeRenderObservable.add(() => {
+            const t = performance.now() * 0.002;
+            const pulse = 0.4 + Math.sin(t) * 0.3;
 
-        orb.scaling.setAll(1 + pulse * 0.05);
-        orbMat.emissiveColor = new Color3(0.4 + pulse * 0.3, 0.7 + pulse * 0.3, 1.0);
-    });
+            orb.scaling.setAll(1 + pulse * 0.05);
+            orbMat.emissiveColor = new Color3(0.4 + pulse * 0.3, 0.7 + pulse * 0.3, 1.0);
+        });
+    }
 
     // --------------------------------------------------------
     // 6) Staff pivot adjustment
@@ -113,7 +112,7 @@ export function createMagicStaff(scene: Scene): TransformNode {
     root.position.y = -0.5;
 
     // --------------------------------------------------------
-    // 7) WEAPON HITBOX (INTERNAL, SAFE)
+    // 7) WEAPON HITBOX (internal, safe)
     // --------------------------------------------------------
     const hitbox = MeshBuilder.CreateBox(
         "staffHitbox",
@@ -122,10 +121,10 @@ export function createMagicStaff(scene: Scene): TransformNode {
         scene
     );
 
-    // gắn vào root của staff
+    // Attach to the staff root.
     hitbox.parent = root;
 
-    // vị trí dọc thân gậy
+    // Position along the staff shaft.
     hitbox.position.y = 0.2;
 
     // DEBUG
@@ -135,13 +134,21 @@ export function createMagicStaff(scene: Scene): TransformNode {
     hitMat.wireframe = true;
     hitMat.disableLighting = true;
     hitbox.material = hitMat;
-    hitbox.isVisible = false; // set true when want to see a box collision
+    hitbox.isVisible = false; // Set to true when you want to see the collision box.
 
-    // // mặc định TẮT (combat mới bật)
+    // Default OFF (enabled by combat state).
     hitbox.setEnabled(false);
 
-    // // expose ra ngoài
+    // Expose externally.
     (root as any).weaponHitbox = hitbox;
+    (root as any).__disposeWeaponFx = () => {
+        if (beforeRenderToken) {
+            scene.onBeforeRenderObservable.remove(beforeRenderToken);
+            beforeRenderToken = null;
+        }
+        ps?.dispose();
+        glow?.dispose();
+    };
 
 
     return root;

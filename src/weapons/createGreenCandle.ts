@@ -13,15 +13,15 @@ export type CandleChartConfig = {
     };
 
     candle: {
-        open: number;   // giá mở
-        close: number;  // giá đóng
-        high: number;   // cao nhất
-        low: number;    // thấp nhất
+        open: number;   // Open price
+        close: number;  // Close price
+        high: number;   // High
+        low: number;    // Low
 
         width: number;
 
-        colorUp: Color3;    // xanh
-        colorDown: Color3;  // đỏ
+        colorUp: Color3;    // Green
+        colorDown: Color3;  // Red
 
         emissiveUp: Color3;
         emissiveDown: Color3;

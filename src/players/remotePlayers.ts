@@ -1,24 +1,24 @@
 import {
   Scene,
   TransformNode,
-  AnimationGroup,
   Vector3,
   Scalar,
-  MeshBuilder,
-  StandardMaterial,
-  Color3,
 } from "@babylonjs/core";
-import { importMeshWithRetry } from "../utils";
 import { filterVisibleRemotes } from "../network/aoiClient";
-import { createMagicStaff } from "../weapons/createMagicStaff";
+import { type AvatarRig } from "./cosmetics/avatarFactory";
+import type { RenderTier, CosmeticDescriptor, CosmeticId } from "./cosmetics/cosmeticTypes";
+import { DEFAULT_COSMETIC_ID } from "./cosmetics/cosmeticTypes";
+import { resolveCosmetic } from "./cosmetics/cosmeticRegistry";
+import { acquireRemoteRig, releaseRemoteRig } from "./remotePlayerPool";
+import { getAnimationBudget } from "./cosmetics/animationBudget";
 
 type Remote = {
   id: string;
   root: TransformNode;
-  idle?: AnimationGroup;
-  run?: AnimationGroup;
-  attack?: AnimationGroup;
-  pendingAttack?: boolean;
+  avatar?: AvatarRig;
+  idle?: import("@babylonjs/core").AnimationGroup;
+  run?: import("@babylonjs/core").AnimationGroup;
+  attack?: import("@babylonjs/core").AnimationGroup;
   weaponPivot?: TransformNode;
   weapon?: TransformNode;
   attackPos?: Vector3;
@@ -26,33 +26,38 @@ type Remote = {
   target: Vector3;
   yaw: number;
   state: "idle" | "run" | "attack";
-  weights: { idle: number; run: number, attack: number }; // blend mềm
+  renderTier?: RenderTier;
+  cosmeticId: CosmeticId;
+  weights: { idle: number; run: number, attack: number }; // Soft blending.
   targets: {
     idle: number;
     run: number;
     attack: number;
   };
+  animationAccumMs?: number;
 
   justSpawned?: boolean;
   isAttacking?: boolean;
-  attackEndFrame?: number; // 🔥 BẮT BUỘC
+  attackEndFrame?: number; // Required.
+};
+
+type PendingAttack = {
+  pos: [number, number, number];
+  yaw: number;
+  duration: number;
 };
 
 export const remotes: Record<string, Remote> = {};
 const loadingRemotes: Set<string> = new Set();
+const pendingAttacksById: Record<string, PendingAttack> = {};
 
 const lastHitTimeByTarget: Record<string, number> = {};
 const HIT_COOLDOWN = 500; // ms
 
-// const ATTACK_FRAMES = 72;
-// const ATTACK_FPS = 24; // Blender default
-// const ATTACK_DURATION = ATTACK_FRAMES / ATTACK_FPS;
-const ATTACK_DISTANCE_EPS = 0.005; // tuning
-
 // let isAttacking = false;
 let hasEmittedThisAttack = false;
 
-// const ATTACK_DURATION = 0.7; // giây – match local
+// const ATTACK_DURATION = 0.7; // Seconds, matching the local player.
 
 export function triggerRemoteAttack(
   r: Remote,
@@ -62,23 +67,34 @@ export function triggerRemoteAttack(
 
   r.isAttacking = true;
 
-  // 🔥 SNAP NGAY LẬP TỨC
+  // Snap immediately.
   r.attackPos = new Vector3(data.pos[0], 0, data.pos[2]);
   r.attackLockPos = r.attackPos.clone();
 
   r.root.position.copyFrom(r.attackLockPos);
   r.root.rotation.y = data.yaw;
 
-  // ❗ IMPORTANT: đồng bộ target luôn
+  // IMPORTANT: keep the target in sync as well.
   r.target.copyFrom(r.attackLockPos);
 
   r.attack.stop();
   r.attack.reset();
   r.attack.start(false);
 
+  r.weights.attack = 1;
+  r.weights.run = 0;
+  r.weights.idle = 0;
   r.targets.attack = 1;
   r.targets.run = 0;
   r.targets.idle = 0;
+}
+
+function applyPendingAttack(id: string, r: Remote) {
+  const pending = pendingAttacksById[id];
+  if (!pending) return;
+
+  delete pendingAttacksById[id];
+  triggerRemoteAttack(r, pending);
 }
 
 
@@ -87,8 +103,14 @@ export async function spawnRemotePlayer(
   scene: Scene,
   id: string,
   modelUrl: string,
-  initState?: { pos: [number, number, number]; yaw: number; state: string }
+  initState?: {
+    pos: [number, number, number];
+    yaw: number;
+    state: string;
+    cosmeticId?: string | null;
+  }
 ) {
+  void modelUrl;
   if (scene.isDisposed) {
     console.warn("⚠️ Cannot spawn, scene is already disposed");
     return null;
@@ -101,92 +123,40 @@ export async function spawnRemotePlayer(
   loadingRemotes.add(id);
 
   const root = new TransformNode("remote_" + id, scene);
-  const rootUrl = modelUrl.slice(0, modelUrl.lastIndexOf("/") + 1);
-  const fileName = modelUrl.slice(modelUrl.lastIndexOf("/") + 1);
-  const { meshes, animationGroups } = await importMeshWithRetry(
-    rootUrl,
-    fileName,
-    scene,
-    1
-  );
-
-  const skeleton = meshes.find(m => (m as any).skeleton)?.skeleton;
-  const skinnedMesh = meshes.find(m => (m as any).skeleton === skeleton);
-  const staff = createMagicStaff(scene);
-
-  const hand = skeleton?.bones.find(b =>
-    /RightHandMiddle1/.test(b.name)
-  );
-
-  if (hand && skinnedMesh) {
-    const weaponPivot = new TransformNode("remoteWeaponPivot", scene);
-
-
-    staff.scaling.setAll(2000); // GIỐNG LOCAL
-    staff.parent = weaponPivot;
-
-    weaponPivot.attachToBone(hand, skinnedMesh);
-
-    weaponPivot.position.set(
-      1,
-      -0.04,
-      1
-    );
-
-    weaponPivot.rotation.set(
-      Math.PI / 2.2,
-      Math.PI / 1.55,
-      Math.PI * 0.05
-    );
-
-    const weaponHitbox = (staff as any).weaponHitbox;
-
-    if (weaponHitbox) {
-      weaponHitbox.setEnabled(false);
-    }
-
-
-  }
-
-  const attack =
-    animationGroups.find(g => /attack/i.test(g.name));
+  const cosmeticResolution = resolveCosmetic(initState?.cosmeticId ?? DEFAULT_COSMETIC_ID);
+  const cosmetic: CosmeticDescriptor = cosmeticResolution.cosmetic;
+  const avatar = await acquireRemoteRig(scene, id, cosmeticResolution.cosmeticId, cosmetic);
+  const attack = avatar.attack;
   let attackEndFrame = 0;
 
   if (attack) {
-    attackEndFrame = attack.to - 36; // GIỐNG LOCAL
+    attackEndFrame = attack.to - 36; // Same as local.
   }
 
   if (attack) {
-    attack.start(true); // chạy ngầm
     attack.enableBlending = true;
     attack.blendingSpeed = 0.12;
     attack.setWeightForAllAnimatables(0);
   }
 
-  const imported = new TransformNode("remoteModel_" + id, scene);
-  for (const m of meshes) if (m.name !== "__root__") m.setParent(imported);
-  imported.scaling.setAll(0.1);
-  imported.parent = root;
-
-  const idle =
-    animationGroups.find((g) => /idle/i.test(g.name)) ?? animationGroups[0];
-  const run = animationGroups.find((g) => /run/i.test(g.name));
-
-  idle?.start(true);
-  run?.start(true);
-  idle?.setWeightForAllAnimatables(1);
-  run?.setWeightForAllAnimatables(0);
-  const weaponPivot = new TransformNode("remoteWeaponPivot_" + id, scene);
+  avatar.root.parent = root;
+  avatar.root.setEnabled(true);
+  avatar.bodyHitbox.setEnabled(true);
+  avatar.weaponPivot?.setEnabled(true);
+  avatar.weapon?.root.setEnabled(true);
+  avatar.weapon?.hitbox?.setEnabled(false);
 
   remotes[id] = {
     id,
     root,
-    idle,
-    run,
-    attack, // 👈 THÊM
-    weaponPivot,   // 👈 LƯU LẠI
-    weapon: staff, // 👈 LƯU LẠI
-    attackEndFrame, // 🔥 LƯU LẠI
+    avatar,
+    idle: avatar.idle,
+    run: avatar.run,
+    attack,
+    weaponPivot: avatar.weaponPivot,
+    weapon: avatar.weapon?.root,
+    attackEndFrame, // Store it.
+    cosmeticId: cosmeticResolution.cosmeticId,
     target: initState
       ? new Vector3(initState.pos[0], initState.pos[1], initState.pos[2])
       : root.position.clone(),
@@ -194,7 +164,9 @@ export async function spawnRemotePlayer(
     state: initState ? (initState.state as any) : "idle",
     weights: { idle: 1, run: 0, attack: 0 },
     targets: { idle: 1, run: 0, attack: 0 },
+    animationAccumMs: 0,
     justSpawned: true,
+    renderTier: "near",
   };
 
   if (initState) {
@@ -204,36 +176,15 @@ export async function spawnRemotePlayer(
     root.rotation.y = initState.yaw;
   }
 
-  // ===============================
-  // BODY HITBOX (REMOTE)
-  // ===============================
-  const bodyHitbox = MeshBuilder.CreateBox(
-    `remoteBodyHitbox_${id}`,
-    { width: 0.5, height: 1.2, depth: 0.4 },
-    scene
-  );
+  // Keep the reference.
+  (remotes[id] as any).bodyHitbox = avatar.bodyHitbox;
 
-  bodyHitbox.parent = root;
-  bodyHitbox.position.y = 0.6; // ngang ngực
-  bodyHitbox.isPickable = false;
-
-
-  // DEBUG MATERIAL
-  const mat = new StandardMaterial("remoteHitboxMat", scene);
-  mat.diffuseColor = new Color3(1, 0, 0); // red
-  mat.alpha = 0.3;
-  bodyHitbox.material = mat;
-  bodyHitbox.isVisible = false; // set true when want to see a box collision
-  // bodyHitbox.setEnabled(false); // set true when want to debug
-
-  // lưu reference
-  (remotes[id] as any).bodyHitbox = bodyHitbox;
-
+  applyPendingAttack(id, remotes[id]);
 
   return remotes[id];
 }
 
-// === Update từ server ===
+// === Update from server ===
 export function updateRemotePlayerFromServer(
   id: string,
   data: { pos: [number, number, number]; yaw: number; state: string }
@@ -244,6 +195,18 @@ export function updateRemotePlayerFromServer(
   r.target.copyFromFloats(data.pos[0], 0, data.pos[2]);
   r.yaw = data.yaw;
   r.state = (data.state as any) || "idle";
+}
+
+export function queueRemoteAttack(
+  id: string,
+  data: { pos: [number, number, number]; yaw: number; duration: number }
+) {
+  pendingAttacksById[id] = data;
+
+  const r = remotes[id];
+  if (r) {
+    applyPendingAttack(id, r);
+  }
 }
 
 export function updateRemotePlayers(scene: Scene, myPos: Vector3) {
@@ -258,7 +221,7 @@ export function updateRemotePlayers(scene: Scene, myPos: Vector3) {
       return;
     }
 
-    // position & rotation smoothing
+    // Position and rotation smoothing.
     if (r.isAttacking && r.attackLockPos) {
       r.root.position.copyFrom(r.attackLockPos);
     } else {
@@ -266,14 +229,21 @@ export function updateRemotePlayers(scene: Scene, myPos: Vector3) {
     }
     r.root.rotation.y = Scalar.LerpAngle(r.root.rotation.y, r.yaw, interp);
 
-    // animation blending
-    const blendSpeed = 6 * dt;
+    // Animation blending.
+    const tier = r.renderTier ?? "near";
+    const budget = getAnimationBudget(tier);
+    const blendSpeed = budget.blendSpeed * dt;
+    r.animationAccumMs = (r.animationAccumMs ?? 0) + dt * 1000;
+    const shouldUpdateAnimation =
+      r.isAttacking ||
+      tier !== "far" ||
+      r.animationAccumMs >= budget.updateEveryMs;
     // =======================
-    // ATTACK OVERRIDE
+    // Attack override
     // =======================
 
 
-    if (!r.isAttacking) {
+    if (shouldUpdateAnimation && !r.isAttacking) {
       r.targets.attack = 0;
 
       if (r.state === "run") {
@@ -291,27 +261,6 @@ export function updateRemotePlayers(scene: Scene, myPos: Vector3) {
     // }
 
 
-    if (r.pendingAttack && !r.isAttacking) {
-      const dist = Vector3.Distance(r.root.position, r.target);
-
-      if (dist <= ATTACK_DISTANCE_EPS) {
-        // ✅ BÂY GIỜ MỚI ATTACK
-        r.pendingAttack = false;
-        r.isAttacking = true;
-
-        r.attackPos = r.root.position.clone();
-
-        r.attack!.stop();
-        r.attack!.reset();
-        r.attack!.start(false);
-
-        r.targets.attack = 1;
-        r.targets.idle = 0;
-        r.targets.run = 0;
-      }
-    }
-
-
     if (r.isAttacking && r.attack?.animatables.length) {
       const frame = r.attack.animatables[0].masterFrame;
 
@@ -319,7 +268,7 @@ export function updateRemotePlayers(scene: Scene, myPos: Vector3) {
         r.isAttacking = false;
         r.attackLockPos = undefined;
 
-        // 🔥 KHÔI PHỤC STATE TỪ SERVER
+        // Restore state from the server.
         r.targets.attack = 0;
 
         if (r.state === "run") {
@@ -337,31 +286,48 @@ export function updateRemotePlayers(scene: Scene, myPos: Vector3) {
     // =======================
     // NORMAL LOCOMOTION
     // =======================
-    else if (r.state === "run") {
-      r.weights.run = Scalar.Clamp(r.weights.run + blendSpeed, 0, 1);
-      r.weights.idle = Scalar.Clamp(r.weights.idle - blendSpeed, 0, 1);
-      r.weights.attack = Scalar.Clamp(r.weights.attack - blendSpeed, 0, 1);
+    if (!r.isAttacking) {
+      if (shouldUpdateAnimation && r.state === "run") {
+        r.weights.run = Scalar.Clamp(r.weights.run + blendSpeed, 0, 1);
+        r.weights.idle = Scalar.Clamp(r.weights.idle - blendSpeed, 0, 1);
+        r.weights.attack = Scalar.Clamp(r.weights.attack - blendSpeed, 0, 1);
+      } else if (shouldUpdateAnimation) {
+        r.weights.idle = Scalar.Clamp(r.weights.idle + blendSpeed, 0, 1);
+        r.weights.run = Scalar.Clamp(r.weights.run - blendSpeed, 0, 1);
+        r.weights.attack = Scalar.Clamp(r.weights.attack - blendSpeed, 0, 1);
+      }
     } else {
-      r.weights.idle = Scalar.Clamp(r.weights.idle + blendSpeed, 0, 1);
-      r.weights.run = Scalar.Clamp(r.weights.run - blendSpeed, 0, 1);
-      r.weights.attack = Scalar.Clamp(r.weights.attack - blendSpeed, 0, 1);
+      r.weights.attack = 1;
+      r.weights.idle = 0;
+      r.weights.run = 0;
     }
 
-    const k = 6;
+    const k = budget.weightLerp;
 
-    r.weights.idle += (r.targets.idle - r.weights.idle) * dt * k;
-    r.weights.run += (r.targets.run - r.weights.run) * dt * k;
-    r.weights.attack += (r.targets.attack - r.weights.attack) * dt * k;
+    if (shouldUpdateAnimation) {
+      r.animationAccumMs = 0;
+      if (r.isAttacking) {
+        r.weights.attack = 1;
+        r.weights.idle = 0;
+        r.weights.run = 0;
+      } else {
+        r.weights.idle += (r.targets.idle - r.weights.idle) * dt * k;
+        r.weights.run += (r.targets.run - r.weights.run) * dt * k;
+        r.weights.attack += (r.targets.attack - r.weights.attack) * dt * k;
+      }
+    }
 
-    r.idle?.setWeightForAllAnimatables(r.weights.idle);
-    r.run?.setWeightForAllAnimatables(r.weights.run);
-    r.attack?.setWeightForAllAnimatables(r.weights.attack);
+    if (shouldUpdateAnimation || tier !== "far") {
+      r.idle?.setWeightForAllAnimatables(r.weights.idle);
+      r.run?.setWeightForAllAnimatables(r.weights.run);
+      r.attack?.setWeightForAllAnimatables(r.weights.attack);
+    }
   });
 
   // ===============================
   // TEST WEAPON COLLISION
   // ===============================
-  const myWeapon = (window as any).myWeaponHitbox; // gán từ local player
+  const myWeapon = (window as any).myWeaponHitbox; // Provided by the local player.
   if (!myWeapon || !myWeapon.isEnabled()) {
     filterVisibleRemotes(myPos);
     return;
@@ -399,22 +365,16 @@ export function despawnRemotePlayer(id: string) {
   const r = remotes[id];
   if (!r) {
     console.warn("⚠️ despawnRemotePlayer: no remote found for", id);
+    delete pendingAttacksById[id];
     return;
   }
 
-  r.weapon?.dispose();
-  r.weaponPivot?.dispose();
-
-  (r as any).bodyHitbox?.dispose();
-
-  r.root.getChildMeshes().forEach((m) => m.dispose());
-
-  r.idle?.dispose();
-  r.run?.dispose();
-  r.attack?.dispose();
-
-  r.root.dispose();
+  if (r.avatar) {
+    releaseRemoteRig(r.avatar, r.avatar.cosmetic, r.cosmeticId);
+  }
+  r.root.dispose(false, true);
 
   delete remotes[id];
   loadingRemotes.delete(id);
+  delete pendingAttacksById[id];
 }

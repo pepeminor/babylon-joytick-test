@@ -10,7 +10,7 @@ export function useJoystick(opts?: { radius?: number; deadzone?: number }) {
     const [joyKnob, setJoyKnob] = useState<{ x: number; y: number } | null>(null);
     const joyOrigin = useRef<{ x: number; y: number } | null>(null);
     const joyPointerId = useRef<number | null>(null);
-    const joyVec = useRef(new Vector3(0, 0, 0)); // x: trái/phải, y: tiến/lùi
+    const joyVec = useRef(new Vector3(0, 0, 0)); // x: left/right, y: forward/back
 
     const onJoyStart = (e: React.PointerEvent) => {
         e.preventDefault();
@@ -41,7 +41,7 @@ export function useJoystick(opts?: { radius?: number; deadzone?: number }) {
         setJoyKnob({ x: joyOrigin.current.x + cx, y: joyOrigin.current.y + cy });
 
         const nx = cx / JOY_RADIUS;
-        const ny = -cy / JOY_RADIUS; // kéo lên = tiến
+        const ny = -cy / JOY_RADIUS; // Dragging up means moving forward.
         const mag = Math.hypot(nx, ny);
         if (mag < JOY_DEADZONE / JOY_RADIUS) {
             joyVec.current.set(0, 0, 0);

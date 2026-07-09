@@ -1,6 +1,6 @@
-// tham số chỉnh một chỗ
+// Single-source tuning parameters.
 export const LOOK_SENS = 0.0032;
-export const LOOK_LERP = 18; // lớn -> bám nhanh
+export const LOOK_LERP = 18; // Higher values make the camera follow faster.
 export const PITCH_MIN = -Math.PI / 2 + 0.05;
 export const PITCH_MAX = 0.6;
 
